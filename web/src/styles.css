@@ -153,3 +153,7 @@ button.primary, .actions button.primary { background: var(--moss); color: #fff; 
   .legend { bottom: 24px; font-size: 0.74em; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+.hatch-swatch { background: repeating-linear-gradient(45deg, rgba(20, 35, 26, 0.65) 0 2px, transparent 2px 6px), #e9ece7; }
+.diag { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.diag h3 { margin-bottom: 4px; }

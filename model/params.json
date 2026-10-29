@@ -1,6 +1,6 @@
 {
-  "_doc": "Paramètres du modèle CèpeRadar. Source unique lue par le pipeline Python et par l'interface. Toutes les valeurs sont des a priori écologiques documentés dans docs/MODELE.md, à recalibrer avec des observations de terrain.",
-  "version": "1.0.0",
+  "_doc": "Paramètres du modèle CèpeRadar V1.1. Source unique lue par le pipeline et l'interface. Justifications : docs/MODELE.md. model/params_v1.json conserve la V1 pour comparaison.",
+  "version": "1.1.0",
   "region": {
     "center_lat": 44.8378,
     "center_lon": -0.5792,
@@ -9,8 +9,8 @@
     "cell_dlon": 0.0127,
     "half_cells": 100,
     "subpixels": 20,
-    "weather_dlat": 0.08,
-    "weather_dlon": 0.11,
+    "weather_dlat": 0.06,
+    "weather_dlon": 0.08,
     "min_forest_fraction": 0.05
   },
   "forest_classes": [
@@ -98,6 +98,16 @@
       "id": 16,
       "key": "ouverte_coniferes",
       "label": "Forêt ouverte (conifères)"
+    },
+    {
+      "id": 17,
+      "key": "jeune_reconstitue",
+      "label": "Jeune peuplement reconstitué (essence non cartographiée)"
+    },
+    {
+      "id": 18,
+      "key": "boise_non_cartographie",
+      "label": "Boisement hors BD Forêt (essence inconnue)"
     }
   ],
   "species": {
@@ -121,7 +131,9 @@
         0.5,
         0.15,
         0.1,
-        0.4
+        0.4,
+        0.4,
+        0.5
       ],
       "ph": [
         4.0,
@@ -221,7 +233,9 @@
         0.25,
         0.15,
         0.1,
-        0.6
+        0.6,
+        0.55,
+        0.4
       ],
       "ph": [
         3.8,
@@ -329,7 +343,9 @@
         0.45,
         0.1,
         0.15,
-        0.1
+        0.1,
+        0.1,
+        0.4
       ],
       "ph": [
         4.5,
@@ -429,7 +445,9 @@
         0.45,
         0.1,
         0.1,
-        0.05
+        0.05,
+        0.05,
+        0.4
       ],
       "ph": [
         4.5,
@@ -538,7 +556,10 @@
     "mix_bonus": 0.08,
     "ph_outside_factor": 0.85,
     "ph_tolerance": 1.0,
-    "topo_max_effect": 0.04
+    "topo_max_effect": 0.04,
+    "loss_recent_years": 6,
+    "loss_young_years": 17,
+    "hydro_penalty": 0.15
   },
   "levels": [
     {
@@ -566,5 +587,23 @@
       "label": "Très favorable",
       "color": "#1b7837"
     }
-  ]
+  ],
+  "moisture": {
+    "_doc": "Modèle C hybride : réservoir de la couche 0-30 cm (type BILJOU, Granier et al. 1999) dont la capacité dépend de la lithologie/texture, combiné à l'humidité volumique modélisée par Open-Meteo convertie en humidité relative (REW).",
+    "depth_mm": 300,
+    "ru_default_mm": 35,
+    "ru_min_mm": 15,
+    "ru_max_mm": 90,
+    "kc_forest": 0.65,
+    "rew_stress": 0.4,
+    "interception_mm": 1.0,
+    "interception_frac": 0.12,
+    "weight_bucket": 0.6,
+    "weight_model": 0.4,
+    "model_env_lo_pct": 5,
+    "model_env_hi_pct": 95,
+    "disagree": 0.35,
+    "m_low": 0.05,
+    "m_high": 0.5
+  }
 }

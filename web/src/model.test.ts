@@ -53,6 +53,18 @@ describe("scores", () => {
   });
 });
 
+describe("états des données", () => {
+  it("données absentes ≠ score faible, confiance basse = incertain", () => {
+    const { st, lt } = fixture();
+    lt.W.edulis[2][1] = 255; lt.W.pinophilus[2][1] = 255; lt.W.aereus[2][1] = 255; lt.W.reticulatus[2][1] = 255;
+    lt.conf.edulis[2] = 40;
+    const day = computeDay(st, lt, "all", 2);
+    expect(day.state[9]).toBe(2);
+    expect(Number.isNaN(day.score[9])).toBe(true);
+    expect(day.state[0]).toBe(1); // confiance 40 < 50
+  });
+});
+
 describe("secteurs", () => {
   it("regroupe les mailles contiguës et ne liste pas 9 fois le même bois", () => {
     const { st, lt } = fixture();

@@ -21,13 +21,14 @@ DAILY = [
     "et0_fao_evapotranspiration", "sunshine_duration", "shortwave_radiation_sum",
     "relative_humidity_2m_mean", "dew_point_2m_mean", "precipitation_hours",
 ]
-HOURLY = ["soil_temperature_6cm", "soil_moisture_3_to_9cm"]
+HOURLY = ["soil_temperature_6cm", "soil_moisture_3_to_9cm", "soil_moisture_9_to_27cm"]
 # nom interne ← variable Open-Meteo
 MAP = {
     "precip": "precipitation_sum", "tmean": "temperature_2m_mean", "tmax": "temperature_2m_max",
     "tmin": "temperature_2m_min", "et0": "et0_fao_evapotranspiration", "sun": "sunshine_duration",
     "rad": "shortwave_radiation_sum", "rh": "relative_humidity_2m_mean", "dew": "dew_point_2m_mean",
     "phours": "precipitation_hours", "tsoil": "soil_temperature_6cm", "sm": "soil_moisture_3_to_9cm",
+    "sm2": "soil_moisture_9_to_27cm",
 }
 REQUIRED = ["precip", "tmean", "tmax", "tmin", "et0"]
 
@@ -76,7 +77,10 @@ def fetch(session, lats, lons, past_days: int, forecast_days: int = 8, budget: d
         log.info("Open-Meteo : points %d–%d / %d (poids %.0f, cumul %.0f)", sl.start, sl.stop - 1, n, w, budget["weight"])
         i = sl.stop
         if i < n:
-            time.sleep(min(70.0, 2.0 + 60.0 * w / 550.0))  # reste sous 600/min
+            # reste sous 600/min et, pour les gros téléchargements, sous ~4 000/h
+            planned = per_loc * n
+            pace = 60.0 * w / 550.0 if planned < 4500 else 3600.0 * w / 4200.0
+            time.sleep(min(400.0, 2.0 + pace))
 
     # --- assemblage ---------------------------------------------------------------------
     first = next(r for r in results if r)
@@ -98,7 +102,7 @@ def fetch(session, lats, lons, past_days: int, forecast_days: int = 8, budget: d
             dindex = {d.isoformat(): k for k, d in enumerate(dates)}
             inv = np.array([dindex.get(d, -1) for d in days])
             okd = inv >= 0
-            for key, var in (("tsoil", "soil_temperature_6cm"), ("sm", "soil_moisture_3_to_9cm")):
+            for key, var in (("tsoil", "soil_temperature_6cm"), ("sm", "soil_moisture_3_to_9cm"), ("sm2", "soil_moisture_9_to_27cm")):
                 if var not in hr:
                     continue
                 vals = np.array([np.nan if v is None else v for v in hr[var]], dtype=float)

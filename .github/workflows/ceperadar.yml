@@ -40,9 +40,10 @@ env:
 jobs:
   compute:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 240
     outputs:
       ran: ${{ steps.plan.outputs.ran }}
+      validate: ${{ steps.val.outputs.validate }}
     steps:
       - uses: actions/checkout@v4
 
@@ -117,11 +118,10 @@ jobs:
           done
           exit 1
 
-      - name: Validation historique
-        if: (steps.plan.outputs.backtest == 'true' || env.NEW_STATIC == '1') && steps.plan.outputs.kind != 'publish' && steps.plan.outputs.kind != 'skip'
-        continue-on-error: true
-        timeout-minutes: 60
-        run: python -m pipeline.backtest
+      - name: Planifier la validation historique
+        id: val
+        run: |
+          if [ "${{ steps.plan.outputs.backtest }}" = "true" ] || [ "${NEW_STATIC:-0}" = "1" ]; then echo "validate=true" >> "$GITHUB_OUTPUT"; else echo "validate=false" >> "$GITHUB_OUTPUT"; fi
 
       - name: Enregistrer les données (branche data, sans historique git)
         if: steps.plan.outputs.kind != 'skip' && steps.plan.outputs.kind != 'publish'
@@ -142,7 +142,41 @@ jobs:
           echo "::error::L'actualisation a échoué ; le site conserve le dernier jeu de données valide."
           cat "$CEPERADAR_DATA/status_failed.json" || true
 
+  validate:
+    # Validation historique : job séparé (autre machine, quota Open-Meteo distinct de la mise à jour)
+    needs: compute
+    if: needs.compute.outputs.validate == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Récupérer la branche de données
+        run: |
+          mkdir -p "$CEPERADAR_DATA"
+          git fetch --depth 1 origin data
+          git --work-tree="$CEPERADAR_DATA" checkout origin/data -- .
+          git reset -q
+      - name: Validation historique (GBIF + iNaturalist, ERA5)
+        run: python -m pipeline.backtest
+      - name: Enregistrer les résultats
+        run: |
+          cd "$CEPERADAR_DATA"
+          rm -rf .git
+          git init -q -b data
+          git config user.name "ceperadar-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Validation historique $(TZ=Europe/Paris date '+%Y-%m-%d %H:%M')"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
+
   deploy:
+    # publiée sans attendre la validation (ses résultats apparaissent à la publication suivante)
     needs: compute
     if: needs.compute.outputs.ran == 'true'
     runs-on: ubuntu-latest

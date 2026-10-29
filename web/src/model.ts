@@ -34,17 +34,37 @@ export function forestGroupOk(cls: number, group: Filters["forestType"]) {
   return FEUILLUS.has(cls);
 }
 
+/** Indice de l'entrée météo d'une maille : unité sol × météo (V1.1) ou point météo (V1). */
+export const wIndex = (st: StaticData, lt: Latest, c: number) =>
+  st.cells.unit && lt.uconf ? st.cells.unit[c] : st.cells.wp[c];
+
+/** Score météo W (0-100) ; NaN si inconnu. */
+export function cellW(st: StaticData, lt: Latest, c: number, sp: SpeciesKey, d: number): number {
+  const w = lt.W[sp][d][wIndex(st, lt, c)];
+  return w === undefined || w === 255 ? NaN : w;
+}
+
 /** Score d'une cellule pour une espèce et une date : round(H × W / 100) ; NaN si inconnu. */
 export function cellScore(st: StaticData, lt: Latest, c: number, sp: SpeciesKey, d: number): number {
-  const w = lt.W[sp][d][st.cells.wp[c]];
-  if (w === undefined || w === 255) return NaN;
-  return Math.round((st.cells.H[sp][c] * w) / 100);
+  const w = cellW(st, lt, c, sp, d);
+  return Number.isNaN(w) ? NaN : Math.round((st.cells.H[sp][c] * w) / 100);
 }
+
+/** Score V1 (comparaison) ; NaN si non disponible. */
+export function cellScoreV1(st: StaticData, lt: Latest, c: number, sp: SpeciesKey, d: number): number {
+  if (!lt.W_v1 || !st.cells.H_v1) return NaN;
+  const w = lt.W_v1[sp][d][st.cells.wp[c]];
+  return w === undefined || w === 255 ? NaN : Math.round((st.cells.H_v1[sp][c] * w) / 100);
+}
+
+/** 0 = score fiable, 1 = incertain (confiance < 50), 2 = données absentes. */
+export type DataState = 0 | 1 | 2;
 
 export interface DayScores {
   score: Float32Array; // NaN = inconnu
   species: Int8Array; // espèce dominante (index dans SPECIES) ou -1
   conf: Uint8Array;
+  state: Uint8Array;
 }
 
 export function computeDay(st: StaticData, lt: Latest, mode: Mode, d: number): DayScores {
@@ -52,6 +72,7 @@ export function computeDay(st: StaticData, lt: Latest, mode: Mode, d: number): D
   const score = new Float32Array(n);
   const species = new Int8Array(n).fill(-1);
   const conf = new Uint8Array(n);
+  const state = new Uint8Array(n);
   const bad = new Set(lt.bad_points);
   const list = mode === "all" ? SPECIES : [mode];
   for (let c = 0; c < n; c++) {
@@ -67,9 +88,21 @@ export function computeDay(st: StaticData, lt: Latest, mode: Mode, d: number): D
     score[c] = best;
     species[c] = bs;
     const spc = bs >= 0 ? SPECIES[bs] : list[0];
-    conf[c] = bad.has(st.cells.wp[c]) ? 0 : Math.min(st.cells.conf[c], lt.conf[spc][d]);
+    const wconf = lt.uconf && st.cells.unit ? lt.uconf[d][st.cells.unit[c]] : lt.conf[spc][d];
+    conf[c] = bad.has(st.cells.wp[c]) ? 0 : Math.min(st.cells.conf[c], wconf);
+    state[c] = Number.isNaN(best) ? 2 : conf[c] < 50 ? 1 : 0;
   }
-  return { score, species, conf };
+  return { score, species, conf, state };
+}
+
+/** Filtres hors score (une maille sans donnée reste affichée en gris). */
+export function passesNonScore(st: StaticData, f: Filters, c: number, day: DayScores) {
+  if (st.cells.dist[c] > f.maxDist) return false;
+  if (day.state[c] !== 2 && day.conf[c] < f.minConf) return false;
+  if (!forestGroupOk(st.cells.c1[c], f.forestType)) return false;
+  if (f.access === "public" && !(st.cells.pub[c] >= 30)) return false;
+  if (f.access === "noprotected" && st.cells.prot[c] > 0) return false;
+  return true;
 }
 
 export function passes(st: StaticData, f: Filters, c: number, day: DayScores) {
@@ -214,6 +247,47 @@ export function buildSectors(st: StaticData, f: Filters, day: DayScores, prevDay
 
 const pct = (x: number | null | undefined) => (x == null ? "?" : Math.round(x * 100));
 
+const WP = params.weather as any;
+/**
+ * Facteur limitant : contribution logarithmique de chaque terme au score final
+ * (score = H × R^a × M^b × T^c × saison × gel × chaleur). Le terme le plus pénalisant est cité,
+ * ainsi que les facteurs favorables (≥ 0,8) pour nuancer.
+ */
+export function limitingFactor(H: number, comp: Comp | undefined): { key: string; text: string; terms: { k: string; v: number }[] } | null {
+  if (!comp) return null;
+  const S = comp.S ?? 1;
+  const season = WP.season_floor + (1 - WP.season_floor) * S;
+  const terms = [
+    { k: "habitat", v: H / 100, w: 1 },
+    { k: "pluie", v: comp.R ?? 1, w: WP.exp_rain },
+    { k: "humidité", v: comp.M ?? 1, w: WP.exp_moist },
+    { k: "température", v: comp.T ?? 1, w: WP.exp_temp },
+    { k: "saison", v: season, w: 1 },
+    { k: "gel", v: comp.frost ?? 1, w: 1 },
+    { k: "chaleur", v: comp.heat ?? 1, w: 1 },
+  ];
+  const contrib = terms.map((t) => ({ k: t.k, c: t.w * Math.log(Math.max(t.v, 1e-3)), v: t.v }));
+  const worst = [...contrib].sort((a, b) => a.c - b.c)[0];
+  const phrases: Record<string, string> = {
+    habitat: "un habitat peu adapté à l'espèce (essences, couverture forestière ou sol)",
+    pluie: "des pluies insuffisantes sur la fenêtre utile",
+    humidité: "une réserve hydrique du sol estimée insuffisante",
+    température: "des températures hors de la plage favorable",
+    saison: "une période hors de la saison habituelle de l'espèce",
+    gel: "une gelée récente",
+    chaleur: "des fortes chaleurs récentes",
+  };
+  const good = contrib.filter((x) => x.k !== worst.k && x.v >= 0.8 && ["pluie", "humidité", "température", "habitat"].includes(x.k)).map((x) => x.k);
+  const goodTxt: Record<string, string> = { pluie: "les pluies", humidité: "l'humidité du sol", température: "les températures", habitat: "l'habitat" };
+  let text: string;
+  if (worst.c > Math.log(0.8)) text = "Aucun facteur nettement limitant : conditions globalement favorables.";
+  else {
+    text = `Score limité principalement par ${phrases[worst.k]}.`;
+    if (good.length) text += ` ${good.map((g) => goodTxt[g]).join(", ").replace(/^./, (m) => m.toUpperCase())} ${good.length > 1 ? "sont" : "est"} pourtant favorable${good.length > 1 ? "s" : ""}.`;
+  }
+  return { key: worst.k, text, terms: terms.map((t) => ({ k: t.k, v: t.v })) };
+}
+
 /** Phrases explicatives construites à partir des composantes réelles du calcul. */
 export function explain(comp: Comp | undefined, day: PointDay | undefined, sp: SpeciesKey): { good: string[]; bad: string[] } {
   const good: string[] = [];
@@ -226,8 +300,9 @@ export function explain(comp: Comp | undefined, day: PointDay | undefined, sp: S
   }
   if (comp.trigger != null && comp.trigger >= 0.7) good.push("Épisode pluvieux marqué 1 à 3 semaines avant : délai compatible avec une sortie de fructifications.");
   if (comp.M != null) {
-    if (comp.M >= 0.7) good.push(`Sol humide d'après le bilan pluie − évapotranspiration (réserve ≈ ${Math.round(day.bucket_pct ?? 0)} %).`);
-    else if (comp.M < 0.3) bad.push(`Sol probablement sec (réserve estimée ≈ ${Math.round(day.bucket_pct ?? 0)} %).`);
+    const m = (comp as any).m != null ? Math.round((comp as any).m * 100) : Math.round(day.bucket_pct ?? 0);
+    if (comp.M >= 0.7) good.push(`Sol humide (humidité relative estimée ≈ ${m} %, bilan hydrique et modèle météo).`);
+    else if (comp.M < 0.3) bad.push(`Sol probablement sec (humidité relative estimée ≈ ${m} %).`);
   }
   if (comp.T != null && comp.t20 != null) {
     if (comp.T >= 0.8) good.push(`Températures dans la plage favorable (moyenne 20 j : ${comp.t20.toFixed(1)} °C).`);

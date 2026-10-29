@@ -28,6 +28,12 @@ def load_params() -> dict:
         return json.load(f)
 
 
+def load_params_v1() -> dict:
+    """Paramètres figés de la V1 (comparaison V1 / V1.1)."""
+    with open(PARAMS_PATH.with_name("params_v1.json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
 def haversine_km(lat1, lon1, lat2, lon2):
     """Distance géodésique (sphère de rayon moyen 6371,0088 km) — écart < 0,5 % avec l'ellipsoïde."""
     r = 6371.0088

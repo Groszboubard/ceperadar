@@ -1,19 +1,19 @@
 import { useEffect, useState } from "react";
 import { loadPoint } from "../data";
-import { CLASS_LABEL, SPECIES_LABEL, SPECIES_LATIN, cellLatLon, cellScore, componentBars, confLabel, explain, levelOf } from "../model";
+import { CLASS_LABEL, SPECIES_LABEL, SPECIES_LATIN, cellLatLon, cellScore, cellScoreV1, cellW, componentBars, confLabel, explain, levelOf, limitingFactor, wIndex } from "../model";
 import type { Latest, Mode, PointDetail, SpeciesKey, StaticData } from "../types";
 import { SPECIES } from "../types";
 import { ScoreBars, WeatherChart } from "./Spark";
 
 interface Props {
-  st: StaticData; lt: Latest; cell: number; d: number; mode: Mode; sectorName?: string;
+  st: StaticData; lt: Latest; cell: number; d: number; mode: Mode; sectorName?: string; diag: boolean;
   isFav: boolean; onToggleFav: () => void; onAddJournal: () => void;
 }
 
 const fmt = (v: any, digits = 0, unit = "") => (v == null || Number.isNaN(v) ? "n. d." : `${Number(v).toFixed(digits)}${unit}`);
 const dayLabel = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" });
 
-export default function CellPanel({ st, lt, cell, d, mode, sectorName, isFav, onToggleFav, onAddJournal }: Props) {
+export default function CellPanel({ st, lt, cell, d, mode, sectorName, diag, isFav, onToggleFav, onAddJournal }: Props) {
   const wp = st.cells.wp[cell];
   const [pt, setPt] = useState<PointDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -26,10 +26,19 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, isFav, on
   const sp: SpeciesKey = mode === "all" ? scores[0].s : mode;
   const score = mode === "all" ? scores[0].v : cellScore(st, lt, cell, mode, d);
   const lvl = levelOf(score || 0);
-  const conf = Math.min(st.cells.conf[cell], lt.conf[sp][d]);
+  const unit = st.cells.unit ? st.cells.unit[cell] : null;
+  const wconf = lt.uconf && unit != null ? lt.uconf[d][unit] : lt.conf[sp][d];
+  const conf = lt.bad_points.includes(wp) ? 0 : Math.min(st.cells.conf[cell], wconf);
   const [lat, lon] = cellLatLon(st, cell);
   const day = pt?.d[d];
-  const comp = day?.comp[sp];
+  const ud = pt?.units && unit != null ? pt.units[String(unit)] : undefined;
+  const comp = ud ? ud.comp[d]?.[sp] : day?.comp?.[sp];
+  const lim = limitingFactor(st.cells.H[sp][cell], comp);
+  const sIdx = pt ? pt.series_dates.indexOf(lt.dates[d]) - 1 : -1; // veille de la date cible
+  const v1 = mode === "all" ? Math.max(...SPECIES.map((s) => cellScoreV1(st, lt, cell, s, d)).filter((x) => !Number.isNaN(x))) : cellScoreV1(st, lt, cell, mode, d);
+  const lith = st.lithology && st.cells.lith ? st.lithology[st.cells.lith[cell]] : null;
+  const absent = Number.isNaN(score);
+  const uncertain = !absent && conf < 50;
   const ex = explain(comp, day, sp);
   const todayIdx = lt.dates.indexOf(lt.today);
   const trendIdx = lt.dates.map((_, k) => k).filter((k) => k >= todayIdx - 7 && k <= todayIdx + 3);
@@ -55,6 +64,8 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, isFav, on
           <strong>{Number.isNaN(score) ? "?" : score}</strong><span>/100</span>
         </div>
       </header>
+      {absent && <p className="warn">Données météo absentes ou inexploitables pour cette maille : aucun score n'est calculé (ce n'est pas un score défavorable).</p>}
+      {uncertain && <p className="note">Score incertain : sources d'humidité contradictoires, échéance lointaine ou peuplement mal connu (confiance {conf}/100).</p>}
       <p className="lvl-line"><b>{Number.isNaN(score) ? "Données manquantes" : lvl.label}</b> pour le {dayLabel(lt.dates[d])}
         {Number.isFinite(prev) && !Number.isNaN(score) && <> · {score - prev >= 0 ? "+" : ""}{score - prev} par rapport à la veille</>}
         {" "}· confiance {confLabel(conf).toLowerCase()}</p>
@@ -65,6 +76,27 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, isFav, on
         <button onClick={onAddJournal}>Noter une sortie ici</button>
       </div>
       <p className="note">Point d'arrivée indicatif. L'accès aux parcelles n'est pas vérifié : suivre uniquement les voies ouvertes au public.</p>
+
+      {diag && (
+        <section className="diag">
+          <h3>Diagnostic du calcul</h3>
+          {lim && <p><b>{lim.text}</b></p>}
+          <table className="kv">
+            <tbody>
+              <tr><th>Score final</th><td>{absent ? "n. d." : score} / 100 ({SPECIES_LABEL[sp].toLowerCase()})</td></tr>
+              <tr><th>Habitat H</th><td>{st.cells.H[sp][cell]} / 100</td></tr>
+              <tr><th>Météo W</th><td>{Number.isNaN(cellW(st, lt, cell, sp, d)) ? "n. d." : cellW(st, lt, cell, sp, d)} / 100</td></tr>
+              <tr><th>Pluie R · humidité M</th><td>{comp?.R != null ? Math.round(comp.R * 100) : "n. d."} · {comp?.M != null ? Math.round(comp.M * 100) : "n. d."}</td></tr>
+              <tr><th>Température T · saison S</th><td>{comp?.T != null ? Math.round(comp.T * 100) : "n. d."} · {comp?.S != null ? Math.round(comp.S * 100) : "n. d."}</td></tr>
+              <tr><th>Qualité des données</th><td>{conf} / 100 (maille {st.cells.conf[cell]}, météo {wconf}){pt?.suspect ? " · point météo atypique" : ""}</td></tr>
+              {ud && <tr><th>Humidité du sol (veille)</th><td>bilan hydrique {ud.rew_a[sIdx] ?? "n. d."} % · modèle météo {ud.rew_b[sIdx] ?? "n. d."} % → retenu {ud.rew[sIdx] ?? "n. d."} %{ud.dis[d] != null && ud.dis[d]! > 0.35 ? " (sources en désaccord)" : ""}</td></tr>}
+              {ud && <tr><th>Sol</th><td>{lith ? lith.label : "lithologie inconnue"} · réserve utile 0–30 cm ≈ {Math.round(ud.ru)} mm</td></tr>}
+              {st.cells.unk && st.cells.unk[cell] > 0 && <tr><th>Essence non cartographiée</th><td>{st.cells.unk[cell]} % des boisements de la maille</td></tr>}
+              {!Number.isNaN(v1) && <tr><th>Score V1 → V1.1</th><td>{v1} → {absent ? "n. d." : score} ({st.cells.H_v1 ? `habitat ${st.cells.H_v1[sp][cell]} → ${st.cells.H[sp][cell]}` : ""}{lt.W_v1 ? `, météo ${lt.W_v1[sp][d][wp]} → ${cellW(st, lt, cell, sp, d)}` : ""})</td></tr>}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       <section>
         <h3>Espèces</h3>
@@ -77,7 +109,7 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, isFav, on
             </li>
           ))}
         </ul>
-        <p className="muted small">Score = habitat × météo. Habitat {SPECIES_LABEL[sp].toLowerCase()} : {st.cells.H[sp][cell]}/100 ; météo : {lt.W[sp][d][wp] === 255 ? "inconnue" : lt.W[sp][d][wp] + "/100"}.</p>
+        <p className="muted small">Score = habitat × météo. Habitat {SPECIES_LABEL[sp].toLowerCase()} : {st.cells.H[sp][cell]}/100 ; météo : {Number.isNaN(cellW(st, lt, cell, sp, d)) ? "inconnue" : cellW(st, lt, cell, sp, d) + "/100"}.</p>
       </section>
 
       <section>
@@ -95,6 +127,7 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, isFav, on
                 </div>
               ))}
             </div>
+            {lim && !diag && <p className="small"><b>{lim.text}</b></p>}
             <ul className="why">
               {ex.good.map((t) => <li key={t} className="pos">{t}</li>)}
               {ex.bad.map((t) => <li key={t} className="neg">{t}</li>)}
@@ -124,7 +157,7 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, isFav, on
               <tr><th>Min / max sur 7 j</th><td>{fmt(day.tmin7, 1)} / {fmt(day.tmax7, 1)} °C · amplitude {fmt(day.amp7, 1)} °C</td></tr>
               <tr><th>Nuits ≤ 8 °C / gel (7 j)</th><td>{fmt(day.cold_nights7)} / {fmt(day.frost_nights7)}</td></tr>
               <tr><th>Sol 6 cm (moy. 7 j)</th><td>{fmt(day.tsoil7, 1)} °C</td></tr>
-              <tr><th>Réserve en eau estimée</th><td>{fmt(day.bucket_pct)} % <span className="muted">(calcul CèpeRadar)</span></td></tr>
+              <tr><th>Humidité relative du sol</th><td>{ud ? `${ud.rew[sIdx] ?? "n. d."} %` : `${fmt(day.bucket_pct)} %`} <span className="muted">(calcul CèpeRadar)</span></td></tr>
               <tr><th>Humidité sol 3–9 cm</th><td>{fmt(day.sm_model, 2)} m³/m³ <span className="muted">(modèle, tendance 7 j {fmt(day.sm_model_trend7, 2)})</span></td></tr>
               <tr><th>Bilan pluie − ETP 14 / 30 j</th><td>{fmt(day.balance14, 0)} / {fmt(day.balance30, 0)} mm</td></tr>
               <tr><th>Humidité air / point de rosée</th><td>{fmt(day.rh7)} % / {fmt(day.dew7, 1)} °C</td></tr>
@@ -132,7 +165,7 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, isFav, on
             </tbody>
           </table>
           {pt && <WeatherChart dates={pt.series_dates} precip={pt.s.precip} tmin={pt.s.tmin} tmax={pt.s.tmax} todayIdx={sTodayIdx} />}
-          <p className="muted small">Point météo {pt?.lat.toFixed(2)}, {pt?.lon.toFixed(2)} (maille du modèle {pt?.model_lat?.toFixed(2)}, {pt?.model_lon?.toFixed(2)}) : une même valeur s'applique à toutes les mailles d'un carré d'environ 9 km. Source : Open-Meteo, calcul du {new Date(lt.generated_at).toLocaleString("fr-FR")}.</p>
+          <p className="muted small">Point météo {pt?.lat.toFixed(2)}, {pt?.lon.toFixed(2)} (maille du modèle {pt?.model_lat?.toFixed(2)}, {pt?.model_lon?.toFixed(2)}) : pluie et températures s'appliquent à un carré d'environ 6,5 km ; l'humidité du sol est ensuite différenciée selon la géologie de chaque maille. Source : Open-Meteo, calcul du {new Date(lt.generated_at).toLocaleString("fr-FR")}.</p>
         </section>
       )}
 
@@ -142,11 +175,11 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, isFav, on
           <tbody>
             <tr><th>Peuplement</th><td>{comps.map((x) => `${CLASS_LABEL[x.c]} (${x.p} %)`).join(", ") || "n. d."}</td></tr>
             <tr><th>Lisières / mélange</th><td>densité de lisière {st.cells.edge[cell]} % · mélange d'essences {st.cells.mix[cell]} %</td></tr>
-            <tr><th>Sol (5–15 cm)</th><td>pH ≈ {st.cells.ph[cell] >= 0 ? (st.cells.ph[cell] / 10).toFixed(1) : "n. d."} · sable {st.cells.sand[cell] >= 0 ? st.cells.sand[cell] + " %" : "n. d."} · argile {st.cells.clay[cell] >= 0 ? st.cells.clay[cell] + " %" : "n. d."}</td></tr>
+            <tr><th>Géologie (BRGM)</th><td>{lith ? `${lith.label}${lith.ph ? ` · pH indicatif ≈ ${lith.ph}` : ""}` : "n. d."}{st.cells.hydro && st.cells.hydro[cell] >= 30 ? " · sols souvent engorgés" : ""}</td></tr>
             <tr><th>Relief</th><td>{st.cells.elev[cell] >= -50 ? `${st.cells.elev[cell]} m` : "n. d."} · pente {st.cells.slope[cell] >= 0 ? (st.cells.slope[cell] / 10).toFixed(1) + "°" : "n. d."} · position {st.cells.tpi[cell] < -2 ? "basse" : st.cells.tpi[cell] > 2 ? "haute" : "neutre"}</td></tr>
           </tbody>
         </table>
-        <p className="muted small">Peuplements : IGN BD Forêt® V2 (millésime départemental, parfois ancien). Sol : SoilGrids 250 m, valeur modélisée et non mesurée à la parcelle. Relief : Copernicus DEM.</p>
+        <p className="muted small">Peuplements : IGN BD Forêt® V2 actualisée par le couvert arboré ESA WorldCover 2021 et les coupes détectées par satellite (Hansen/UMD). Géologie : BRGM 1/50 000 (pH et réserve utile indicatifs par formation, pas des mesures à la parcelle). Relief : Copernicus DEM.</p>
       </section>
 
       <section>

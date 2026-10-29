@@ -46,6 +46,69 @@ def bucket_series(precip: np.ndarray, et0: np.ndarray, bmax: float, kc: float) -
     return out
 
 
+def rew_bucket(precip: np.ndarray, et0: np.ndarray, ru: np.ndarray, mp: dict, init: np.ndarray | None = None) -> np.ndarray:
+    """Modèle A' : réserve extractible relative (REW, 0-1) de la couche 0-30 cm, type BILJOU.
+
+    - capacité RU propre à chaque unité (lithologie / texture) ;
+    - interception par la canopée : ~1 mm + 12 % de chaque pluie ne rejoint pas le sol ;
+    - pertes = kc × ETP, réduites linéairement quand REW < 0,4 (régulation stomatique et
+      évaporation du sol limitées par la sécheresse, Granier et al. 1999) : la réserve
+      décroît alors de façon asymptotique et conserve une humidité résiduelle réaliste ;
+    - excédent au-delà de RU : drainage (sables très drainants).
+    Les jours sans donnée ne mettent pas à jour la réserve et sont marqués inconnus.
+    """
+    n, T = precip.shape
+    ru = np.asarray(ru, dtype=float)
+    first = np.full(n, -1)
+    for k in range(n):
+        f = np.where(np.isfinite(precip[k]) & np.isfinite(et0[k]))[0]
+        first[k] = f[0] if len(f) else T
+    w = ru * (np.clip(init, 0.05, 1.0) if init is not None else 0.5)
+    w = np.where(np.isfinite(w), w, ru * 0.5)
+    out = np.full((n, T), np.nan)
+    for t in range(T):
+        p = precip[:, t]
+        e = et0[:, t]
+        ok = np.isfinite(p) & np.isfinite(e) & (t >= first)
+        pp = np.nan_to_num(p)
+        net = np.maximum(0.0, pp - np.minimum(pp, mp["interception_mm"] + mp["interception_frac"] * pp))
+        rew = w / ru
+        loss = mp["kc_forest"] * np.nan_to_num(e) * np.minimum(1.0, rew / mp["rew_stress"])
+        nw = np.clip(w + net - loss, 0.0, ru)
+        w = np.where(ok, nw, w)
+        out[:, t] = np.where(ok, w / ru, np.nan)
+    return out
+
+
+def rew_from_model(sm_layers: list[np.ndarray], envelopes: list[tuple[float, float]]) -> np.ndarray:
+    """Modèle B : humidité volumique Open-Meteo (m³/m³) → humidité relative (0-1).
+
+    m³/m³ et mm ne sont pas interchangeables : on normalise chaque couche par son enveloppe
+    empirique (centiles 5 et 95 sur la région et la période), qui représente les états
+    « sec » et « humide » du modèle lui-même. Moyenne des couches disponibles.
+    """
+    acc = None
+    cnt = None
+    for a, (lo, hi) in zip(sm_layers, envelopes):
+        r = np.clip((a - lo) / max(hi - lo, 1e-6), 0, 1)
+        f = np.isfinite(r)
+        acc = np.where(f, r, 0.0) if acc is None else acc + np.where(f, r, 0.0)
+        cnt = f.astype(float) if cnt is None else cnt + f
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(cnt > 0, acc / np.maximum(cnt, 1), np.nan)
+
+
+def moisture_hybrid(rew_a: np.ndarray, rew_b: np.ndarray, mp: dict):
+    """Modèle C : moyenne pondérée A'/B si les deux existent, sinon A' seul.
+
+    Renvoie (REW combiné, désaccord |A'-B|) ; un désaccord > seuil rend la date « incertaine ».
+    """
+    both = np.isfinite(rew_a) & np.isfinite(rew_b)
+    c = np.where(both, mp["weight_bucket"] * rew_a + mp["weight_model"] * np.nan_to_num(rew_b), rew_a)
+    dis = np.where(both, np.abs(rew_a - np.nan_to_num(rew_b)), np.nan)
+    return c, dis
+
+
 def _window_mean(a: np.ndarray, t: int, n: int) -> np.ndarray:
     lo = max(0, t - n)
     if t - n < 0:
@@ -90,12 +153,20 @@ def components_for_date(series: dict, t: int, doy: int, sp: dict, wp: dict) -> d
     trig = np.max(np.minimum(1.0, s3 / wp["trigger_full_mm"]) * tk, axis=1) if len(tl) else np.zeros(n_pts)
     R = wp["w_rain_cumul"] * r_cumul + wp["w_rain_trigger"] * trig
 
-    # --- M : humidité du sol (bilan hydrique) -------------------------------------------
-    B = series["bucket"] / wp["bucket_max_mm"]
+    # --- M : humidité du sol -----------------------------------------------------------------
+    if "rew" in series:
+        # V1.1 : humidité relative extractible (0-1) du modèle hybride (voir moisture_hybrid)
+        mp = series["moisture_params"]
+        B = series["rew"]
+        lo_, hi_ = mp["m_low"], mp["m_high"]
+    else:
+        # V1 : réservoir unique de 50 mm
+        B = series["bucket"] / wp["bucket_max_mm"]
+        lo_, hi_ = wp["moisture_low"], wp["moisture_high"]
     m_now = B[:, t - 1] if t >= 1 else np.full(n_pts, np.nan)
     m_5 = _window_mean(B, t, 5)
     m = 0.6 * m_now + 0.4 * m_5
-    M = np.clip((m - wp["moisture_low"]) / (wp["moisture_high"] - wp["moisture_low"]), 0, 1)
+    M = np.clip((m - lo_) / (hi_ - lo_), 0, 1)
     M = M * M * (3 - 2 * M)  # lissage (smoothstep)
 
     # --- T : température -----------------------------------------------------------------
@@ -133,7 +204,7 @@ def components_for_date(series: dict, t: int, doy: int, sp: dict, wp: dict) -> d
 
     return {
         "W": W, "R": R, "M": M, "T": T, "S": np.full(n_pts, S), "frost": frost, "heat": heat,
-        "bonus": bonus, "eff_rain": eff, "trigger": trig, "t20": t20, "t7": t7, "ts7": ts7,
+        "bonus": bonus, "eff_rain": eff, "trigger": trig, "t20": t20, "t7": t7, "ts7": ts7, "m": m,
     }
 
 

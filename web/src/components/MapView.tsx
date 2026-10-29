@@ -8,6 +8,7 @@ export type Basemap = "plan" | "ortho";
 interface Props {
   st: StaticData;
   colors: (string | null)[]; // couleur par cellule (null = masquée)
+  uncertain: boolean[]; // hachures « score incertain »
   selected: number | null;
   highlight: number[];
   overlayAccess: boolean;
@@ -59,7 +60,7 @@ export default function MapView(p: Props) {
         ],
       },
     });
-    m.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: "BD Forêt® V2 IGN · Open-Meteo (CC BY 4.0) · SoilGrids ISRIC · Copernicus DEM · GBIF" }));
+    m.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: "BD Forêt® V2 IGN · Open-Meteo (CC BY 4.0) · ESA WorldCover · Hansen/UMD GFC · BRGM · Copernicus DEM · GBIF · iNaturalist" }));
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     m.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: false }), "top-right");
     m.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
@@ -70,6 +71,8 @@ export default function MapView(p: Props) {
       for (let c = 0; c < n; c++) feats[c] = { type: "Feature", id: c, properties: { c, col: "#0000", pub: p.st.cells.pub[c], prot: p.st.cells.prot[c] }, geometry: { type: "Polygon", coordinates: cellPolygon(p.st, c) } };
       m.addSource("cells", { type: "geojson", data: { type: "FeatureCollection", features: feats } as any });
       m.addLayer({ id: "cells", type: "fill", source: "cells", paint: { "fill-color": ["get", "col"], "fill-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.78, 12, 0.55, 15, 0.35] }, filter: ["!=", ["get", "col"], "#0000"] });
+      m.addImage("hatch", hatchImage());
+      m.addLayer({ id: "cells-unc", type: "fill", source: "cells", paint: { "fill-pattern": "hatch", "fill-opacity": 0.75 }, filter: ["==", ["get", "u"], 1] });
       m.addLayer({ id: "pub", type: "line", source: "cells", layout: { visibility: "none" }, filter: [">=", ["get", "pub"], 30], paint: { "line-color": "#2b6cb0", "line-width": 1.2 } });
       m.addLayer({ id: "prot", type: "line", source: "cells", layout: { visibility: "none" }, filter: [">", ["get", "prot"], 0], paint: { "line-color": "#7b3fa0", "line-width": 1.6, "line-dasharray": [2, 1] } });
       m.addSource("hl", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
@@ -106,10 +109,10 @@ export default function MapView(p: Props) {
     whenReady((m) => {
       const n = p.st.cells.i.length;
       const feats = new Array(n);
-      for (let c = 0; c < n; c++) feats[c] = { type: "Feature", id: c, properties: { c, col: p.colors[c] ?? "#0000", pub: p.st.cells.pub[c], prot: p.st.cells.prot[c] }, geometry: { type: "Polygon", coordinates: cellPolygon(p.st, c) } };
+      for (let c = 0; c < n; c++) feats[c] = { type: "Feature", id: c, properties: { c, col: p.colors[c] ?? "#0000", u: p.uncertain[c] ? 1 : 0, pub: p.st.cells.pub[c], prot: p.st.cells.prot[c] }, geometry: { type: "Polygon", coordinates: cellPolygon(p.st, c) } };
       (m.getSource("cells") as maplibregl.GeoJSONSource).setData({ type: "FeatureCollection", features: feats } as any);
     });
-  }, [p.colors, p.st]);
+  }, [p.colors, p.uncertain, p.st]);
 
   useEffect(() => {
     whenReady((m) => {
@@ -152,6 +155,19 @@ export default function MapView(p: Props) {
   }, [p.flyTo]);
 
   return <div ref={ref} className="map" role="application" aria-label="Carte des indices de favorabilité" />;
+}
+
+/** Motif de hachures diagonales (score incertain), dessiné en mémoire. */
+function hatchImage() {
+  const size = 8;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const on = (x + y) % size < 2;
+      const k = (y * size + x) * 4;
+      data[k] = 20; data[k + 1] = 35; data[k + 2] = 26; data[k + 3] = on ? 170 : 0;
+    }
+  return { width: size, height: size, data };
 }
 
 function radiusCircle(st: StaticData) {

@@ -14,8 +14,9 @@ HOST_CLASSES = list(range(1, 17))
 def host_quality(fractions: np.ndarray, affinity: list[float]) -> np.ndarray:
     """fractions : (n_cells, n_classes) parts de surface de la cellule ; renvoie 0-1."""
     aff = np.asarray(affinity, dtype=float)
-    forest = fractions[:, 1:].sum(axis=1)
-    weighted = (fractions[:, 1:] * aff[1:]).sum(axis=1)
+    cols = list(range(1, fractions.shape[1]))
+    forest = fractions[:, cols].sum(axis=1)
+    weighted = (fractions[:, cols] * aff[cols]).sum(axis=1)
     with np.errstate(invalid="ignore", divide="ignore"):
         q = np.where(forest > 0, weighted / forest, 0.0)
     return q
@@ -86,6 +87,9 @@ def habitat_scores(static: dict, params: dict) -> dict[str, np.ndarray]:
         h = q * cov * struct
         h *= ph_factor(static["ph"], sp["ph"], hp)
         h *= topo_factor(static["slope"], static["north_share"], static["tpi"], s, hp)
+        if "hydro" in static and "hydro_penalty" in hp:
+            # sols engorgés (tourbes, alluvions) : asphyxie du mycélium (V1.1)
+            h *= 1 - hp["hydro_penalty"] * np.clip(np.nan_to_num(static["hydro"]), 0, 1)
         h = np.where(forest >= params["region"]["min_forest_fraction"], h, 0.0)
         out[s] = np.clip(h, 0, 1)
     return out

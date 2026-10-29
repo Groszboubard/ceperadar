@@ -228,3 +228,61 @@ def test_rasterization_orientation_and_fractions():
     assert abs(fr[:, :, 4].sum() - 4) < 0.1
     e = sources.edge_density(r, g, 10)
     assert e[n + 10, n + 5] > 0 and e[n, n] == 0
+
+
+# ---------------------------------------------------------------------------- V1.1 humidité
+def test_rew_bucket_keeps_residual_moisture_and_never_invents():
+    mp = P["moisture"]
+    n = 60
+    precip = np.zeros((2, n)); precip[:, 5] = 30
+    et0 = np.full((2, n), 2.0)
+    r = engine.rew_bucket(precip, et0, np.array([22.0, 55.0]), mp, init=np.array([0.5, 0.5]))
+    # décroissance asymptotique : jamais exactement zéro après 50 jours secs
+    assert 0 < r[0, -1] < 0.1 and r[1, -1] > r[0, -1]
+    precip[0, 30:35] = np.nan
+    r2 = engine.rew_bucket(precip, et0, np.array([22.0, 55.0]), mp)
+    assert np.isnan(r2[0, 32]) and np.isfinite(r2[0, 40])
+
+
+def test_model_moisture_normalisation_and_hybrid():
+    mp = P["moisture"]
+    sm = np.array([[0.05, 0.15, 0.30, np.nan]])
+    b = engine.rew_from_model([sm], [(0.05, 0.30)])
+    assert np.allclose(b[0, :3], [0, 0.4, 1]) and np.isnan(b[0, 3])
+    a = np.array([[0.1, 0.5, 0.9, 0.5]])
+    c, dis = engine.moisture_hybrid(a, b, mp)
+    assert abs(c[0, 1] - (0.6 * 0.5 + 0.4 * 0.4)) < 1e-9 and c[0, 3] == 0.5 and np.isnan(dis[0, 3])
+
+
+def test_v11_moisture_does_not_zero_out_moderate_conditions():
+    """Un sol à réserve modérée (REW 0,3) ne doit plus annuler le score, une vraie sécheresse oui."""
+    s = make_series(rain={70: 20, 71: 25, 72: 15, 85: 12})
+    s["moisture_params"] = P["moisture"]
+    s["rew"] = np.full_like(s["precip"], 0.3)
+    w_mod = W(s, 97, OCT15)
+    s["rew"] = np.full_like(s["precip"], 0.02)
+    w_dry = W(s, 97, OCT15)
+    assert w_mod > 0.4 and w_dry < 0.05
+
+
+def test_effective_classes():
+    from pipeline import sources
+    base = np.array([[14, 14, 1, 1, 0, 0, 4]], dtype=np.uint8)
+    wc = np.array([[10, 30, 10, 10, 10, 40, 10]], dtype=np.uint8)
+    ly = np.array([[0, 0, 23, 17, 0, 0, 0]], dtype=np.uint8)  # 2023 = coupe récente ; 2017 = jeune peuplement
+    eff = sources.effective_classes(base, wc, ly, P["habitat"])
+    assert eff.tolist() == [[17, 14, 14, 17, 18, 0, 4]]
+
+
+@pytest.mark.parametrize("txt,key", [
+    ("Sables éoliens des Landes (Formation du Sable des Landes)", "sable_landes"),
+    ("Dunes littorales actuelles", "dune"),
+    ("Calcaire à Astéries, Oligocène", "calcaire"),
+    ("Alluvions fluviatiles récentes : argiles, vases", "argile_alluvions"),
+    ("Graves et galets des hautes terrasses", "graves"),
+    ("Tourbes et dépôts de marais", "tourbe"),
+    ("Molasses de l'Agenais", "limon"),
+])
+def test_litho_classification(txt, key):
+    from pipeline import sources
+    assert sources.LITHO_KEYS[sources.classify_litho(txt)] == key

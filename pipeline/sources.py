@@ -207,8 +207,12 @@ def block_mean(mask: np.ndarray, grid, sub) -> np.ndarray:
     return mask.reshape(n, sub, n, sub).mean(axis=(1, 3))[::-1, :]
 
 
-def edge_density(raster: np.ndarray, grid, sub) -> np.ndarray:
-    forest = np.isin(raster, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16])
+FOREST_CLASSES_V1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16]
+FOREST_CLASSES = FOREST_CLASSES_V1 + [17, 18]
+
+
+def edge_density(raster: np.ndarray, grid, sub, classes=None) -> np.ndarray:
+    forest = np.isin(raster, classes or FOREST_CLASSES)
     edge = np.zeros_like(forest)
     edge[1:, :] |= forest[1:, :] & ~forest[:-1, :]
     edge[:-1, :] |= forest[:-1, :] & ~forest[1:, :]
@@ -400,3 +404,263 @@ def fetch_gbif(session, bounds):
                 break
         log.info("GBIF %s (taxon %s) : %d observations cumulées", name, tk, len(out))
     return out
+
+
+# ---------------------------------------------------------------------------
+# V1.1 — Couvert arboré actuel (ESA WorldCover 2021, 10 m) et coupes (Hansen GFC)
+# ---------------------------------------------------------------------------
+def _read_into_subgrid(urls, grid, sub, resampling, dtype="uint8"):
+    """Lit des rasters EPSG:4326 publics (COG/GeoTIFF via HTTP) dans la sous-grille de CèpeRadar.
+
+    Lecture fenêtrée avec rééchantillonnage direct (les aperçus du COG sont utilisés), car les
+    deux grilles sont en degrés : pas de reprojection, seulement un changement de pas.
+    """
+    import rasterio
+    from rasterio.windows import from_bounds
+
+    w, s, e, n = grid.bounds
+    H = W = grid.size * sub
+    px, py = grid.dlon / sub, grid.dlat / sub
+    dst = np.zeros((H, W), dtype=dtype)
+    ok = []
+    for url in urls:
+        try:
+            with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR", GDAL_HTTP_MAX_RETRY="4", GDAL_HTTP_RETRY_DELAY="5",
+                              CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif"):
+                with rasterio.open(("/vsicurl/" + url) if url.startswith("http") else url) as src:
+                    b = src.bounds
+                    iw, ie = max(w, b.left), min(e, b.right)
+                    is_, in_ = max(s, b.bottom), min(n, b.top)
+                    if iw >= ie or is_ >= in_:
+                        continue
+                    c0 = int(round((iw - w) / px)); c1 = int(round((ie - w) / px))
+                    r0 = int(round((n - in_) / py)); r1 = int(round((n - is_) / py))
+                    if c1 <= c0 or r1 <= r0:
+                        continue
+                    # bornes exactes des pixels cibles
+                    win = from_bounds(w + c0 * px, n - r1 * py, w + c1 * px, n - r0 * py, src.transform)
+                    data = src.read(1, window=win, out_shape=(r1 - r0, c1 - c0), resampling=resampling, boundless=True, fill_value=0)
+                    tgt = dst[r0:r1, c0:c1]
+                    m = data > 0
+                    tgt[m] = data[m].astype(dtype)
+                    ok.append(url.rsplit("/", 1)[-1])
+        except Exception as ex:
+            log.warning("Lecture impossible %s : %s", url.rsplit("/", 1)[-1], str(ex)[:160])
+    return dst, ok
+
+
+def _tile_names(grid, step, fmt):
+    w, s, e, n = grid.bounds
+    out = []
+    for la in range(int(np.floor(s / step) * step), int(np.floor(n / step) * step) + 1, step):
+        for lo in range(int(np.floor(w / step) * step), int(np.floor(e / step) * step) + 1, step):
+            out.append(fmt(la, lo))
+    return out
+
+
+def fetch_worldcover(grid, sub):
+    """Classes ESA WorldCover 2021 v200 (10 = couvert arboré). Licence CC BY 4.0."""
+    from rasterio.enums import Resampling
+
+    def name(la, lo):
+        ns = f"N{la:02d}" if la >= 0 else f"S{-la:02d}"
+        ew = f"E{lo:03d}" if lo >= 0 else f"W{-lo:03d}"
+        return f"https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_{ns}{ew}_Map.tif"
+
+    urls = _tile_names(grid, 3, name)
+    r, ok = _read_into_subgrid(urls, grid, sub, Resampling.mode)
+    log.info("WorldCover 2021 : %d tuiles lues (%s)", len(ok), ok)
+    return r, ok
+
+
+def fetch_hansen_lossyear(session, grid, sub, versions=("GFC-2024-v1.12", "GFC-2023-v1.11")):
+    """Année de perte de couvert arboré (1 = 2001 … 24 = 2024), Hansen et al. / UMD, CC BY 4.0."""
+    from rasterio.enums import Resampling
+
+    for v in versions:
+        base = f"https://storage.googleapis.com/earthenginepartners-hansen/{v}"
+        try:
+            lst = http_get(session, f"{base}/lossyear.txt", expect_json=False, timeout=60, retries=2).text.split()
+        except Exception as ex:
+            log.warning("Index Hansen %s indisponible : %s", v, ex)
+            continue
+
+        def name(la, lo):
+            lat_s = f"{la + 10:02d}N" if la + 10 >= 0 else f"{-(la + 10):02d}S"
+            lon_s = f"{-lo:03d}W" if lo < 0 else f"{lo:03d}E"
+            want = f"_{lat_s}_{lon_s}.tif"
+            hit = [u for u in lst if u.endswith(want)]
+            return hit[0] if hit else f"{base}/Hansen_{v}_lossyear_{lat_s}_{lon_s}.tif"
+
+        urls = sorted(set(_tile_names(grid, 10, name)))
+        r, ok = _read_into_subgrid(urls, grid, sub, Resampling.nearest)
+        if ok:
+            log.info("Hansen %s : %d tuiles lues ; part de pixels avec perte = %.2f %%", v, len(ok), 100 * (r > 0).mean())
+            return r, v
+    return None, None
+
+
+def effective_classes(base, worldcover, lossyear, hp, current_year=2026):
+    """Actualise les classes BD Forêt avec le couvert 2021 et les coupes détectées par satellite.
+
+    - perte de couvert depuis ≤ loss_recent_years ans → coupe récente (14), quelle que soit l'essence cartographiée ;
+    - perte entre loss_young_years et loss_recent_years ans → jeune peuplement reconstitué (17) ;
+    - « sans couvert arboré » BD Forêt (14) redevenu arboré en 2021 → jeune peuplement reconstitué (17) ;
+    - hors BD Forêt mais arboré en 2021 → boisement non cartographié (18), essence inconnue.
+    """
+    eff = base.copy()
+    forest_cls = np.isin(base, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16])
+    tree21 = worldcover == 10 if worldcover is not None else np.zeros_like(base, dtype=bool)
+    if lossyear is not None:
+        age = np.where(lossyear > 0, current_year - (2000 + lossyear.astype(int)), 999)
+        recent = (age <= hp["loss_recent_years"])
+        young = (age > hp["loss_recent_years"]) & (age <= hp["loss_young_years"])
+    else:
+        recent = young = np.zeros_like(base, dtype=bool)
+    eff[(base == 14) & (tree21 | young) & ~recent] = 17
+    eff[forest_cls & young & (base != 11)] = 17
+    eff[(forest_cls | (base == 14)) & recent] = 14
+    if worldcover is not None:
+        eff[(base == 0) & tree21] = 18
+    return eff
+
+
+# ---------------------------------------------------------------------------
+# V1.1 — Lithologie BRGM (cartes géologiques harmonisées à 1/50 000)
+# ---------------------------------------------------------------------------
+LITHO = [
+    # clé, libellé, réserve utile 0-30 cm (mm), pH indicatif, hydromorphie (0-1)
+    ("inconnue", "Lithologie inconnue", None, None, 0.0),
+    ("sable_landes", "Sables éoliens (plateau landais)", 22, 4.5, 0.2),
+    ("dune", "Sables dunaires littoraux", 18, 5.5, 0.0),
+    ("graves", "Graves, galets, terrasses", 30, 5.5, 0.0),
+    ("sable", "Sables (autres formations)", 28, 5.0, 0.0),
+    ("limon", "Limons, molasses, colluvions", 55, 6.3, 0.1),
+    ("argile_alluvions", "Argiles, alluvions, vases", 70, 6.8, 0.6),
+    ("calcaire", "Calcaires, marnes, craie", 45, 7.8, 0.0),
+    ("tourbe", "Tourbes, marais", 90, 5.0, 1.0),
+]
+LITHO_KEYS = [x[0] for x in LITHO]
+
+
+def classify_litho(text: str) -> int:
+    t = norm(text)
+    def k(key):
+        return LITHO_KEYS.index(key)
+    if any(w in t for w in ("tourbe", "marais", "tourbeux")):
+        return k("tourbe")
+    if "dune" in t:
+        return k("dune")
+    if "sable" in t and any(w in t for w in ("landes", "eolien", "couverture", "castets", "belin")):
+        return k("sable_landes")
+    if any(w in t for w in ("calcaire", "craie", "marne", "dolomie", "calcarenite")):
+        return k("calcaire")
+    if any(w in t for w in ("alluvion", "vase", "fluvio-marin", "fluviomarin", "estuarien", "argile")) and "sable" not in t[:20]:
+        return k("argile_alluvions")
+    if any(w in t for w in ("grave", "galet", "cailloutis", "terrasse")):
+        return k("graves")
+    if any(w in t for w in ("limon", "molasse", "colluvion", "loess")):
+        return k("limon")
+    if "sable" in t or "sablo" in t:
+        return k("sable")
+    if "alluvion" in t or "argile" in t:
+        return k("argile_alluvions")
+    return k("inconnue")
+
+
+def fetch_brgm_litho(grid, sub, departements=("33", "40", "47", "24", "17", "16")):
+    """Rastérise la lithologie BRGM (couche des formations géologiques) sur la sous-grille."""
+    import shapefile  # pyshp
+    import shapely
+    import tempfile, zipfile, os
+    from pyproj import Transformer
+    from rasterio.features import rasterize
+    from rasterio.transform import from_origin
+    from shapely.geometry import shape as shp_shape
+    import requests
+
+    w, s, e, n = grid.bounds
+    out_shape = (grid.size * sub, grid.size * sub)
+    transform = from_origin(w, n, grid.dlon / sub, grid.dlat / sub)
+    shapes = []
+    stats = {"ok": [], "failed": [], "texts": {}}
+    from shapely.geometry import box
+    roi = box(w, s, e, n)
+    for d in departements:
+        content = None
+        for url in (f"https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_{d}.zip",
+                    f"http://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_{d}.zip"):
+            try:
+                r = requests.get(url, timeout=600, headers={"User-Agent": "CepeRadar/1.1"})
+                if r.status_code == 200 and r.content[:2] == b"PK":
+                    content = r.content
+                    break
+                log.warning("BRGM %s : HTTP %s", url, r.status_code)
+            except Exception as ex:
+                log.warning("BRGM %s : %s", url, ex)
+        if content is None:
+            stats["failed"].append(d)
+            continue
+        with tempfile.TemporaryDirectory() as tmp:
+            zp = os.path.join(tmp, "z.zip")
+            open(zp, "wb").write(content)
+            with zipfile.ZipFile(zp) as z:
+                names = z.namelist()
+                shp = [x for x in names if x.lower().endswith(".shp") and "fgeol" in x.lower()]
+                if not shp:
+                    log.warning("BRGM %s : couche des formations introuvable (%s)", d, [x for x in names if x.endswith('.shp')][:10])
+                    stats["failed"].append(d)
+                    continue
+                z.extractall(tmp)
+            path = os.path.join(tmp, shp[0])
+            prj = path[:-4] + ".prj"
+            src_crs = "EPSG:2154"
+            if os.path.exists(prj):
+                txt = open(prj, encoding="latin-1").read()
+                if "Lambert_Conformal_Conic" not in txt and "GCS" in txt and "PROJCS" not in txt:
+                    src_crs = "EPSG:4326"
+            tr = Transformer.from_crs(src_crs, "EPSG:4326", always_xy=True)
+            rd = shapefile.Reader(path, encoding="latin-1")
+            fields = [f[0] for f in rd.fields[1:]]
+            cnt = 0
+            for sr in rd.iterShapeRecords():
+                try:
+                    g = shp_shape(sr.shape.__geo_interface__)
+                except Exception:
+                    continue
+                g = shapely.transform(g, lambda xy: np.column_stack(tr.transform(xy[:, 0], xy[:, 1])))
+                if not g.intersects(roi):
+                    continue
+                rec = dict(zip(fields, sr.record))
+                text = " ".join(str(v) for k, v in rec.items() if isinstance(v, str) and k.upper() in
+                                ("DESCR", "DESCRIPTION", "LEGENDE", "NOTATION", "LITHOLOGIE", "LITHO", "TYPE_GEOL", "AP_LOCALE", "NOM"))
+                if not text.strip():
+                    text = " ".join(str(v) for v in rec.values() if isinstance(v, str))
+                c = classify_litho(text)
+                key = LITHO_KEYS[c]
+                stats["texts"].setdefault(key, {})
+                short = text[:90]
+                stats["texts"][key][short] = stats["texts"][key].get(short, 0) + 1
+                if c > 0:
+                    shapes.append((g, c))
+                    cnt += 1
+            stats["ok"].append(d)
+            log.info("BRGM %s : %d polygones utiles (champs %s)", d, cnt, fields[:12])
+    for key in stats["texts"]:
+        stats["texts"][key] = sorted(stats["texts"][key].items(), key=lambda x: -x[1])[:12]
+    if not shapes:
+        return None, stats
+    r = rasterize(shapes, out_shape=out_shape, transform=transform, fill=0, dtype="uint8")
+    return r, stats
+
+
+def saxton_rawls_ru(sand_pct, clay_pct, soc_gkg, depth_mm=300):
+    """Réserve utile (mm) par fonctions de pédotransfert de Saxton & Rawls (2006)."""
+    S = np.asarray(sand_pct, float) / 100
+    C = np.asarray(clay_pct, float) / 100
+    OM = np.clip(np.asarray(soc_gkg, float) * 1.724 / 10, 0.5, 8)
+    t15 = -0.024 * S + 0.487 * C + 0.006 * OM + 0.005 * S * OM - 0.013 * C * OM + 0.068 * S * C + 0.031
+    wp = t15 + (0.14 * t15 - 0.02)
+    t33 = -0.251 * S + 0.195 * C + 0.011 * OM + 0.006 * S * OM - 0.027 * C * OM + 0.452 * S * C + 0.299
+    fc = t33 + (1.283 * t33 ** 2 - 0.374 * t33 - 0.015)
+    return (fc - wp) * depth_mm

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import re
 import datetime as dt
 import sys
 
@@ -15,7 +16,7 @@ import numpy as np
 import requests
 
 from . import habitat, sources
-from .common import DATA_DIR, Grid, load_params, log, write_json
+from .common import DATA_DIR, Grid, load_params, load_params_v1, log, write_json
 
 
 def main(argv=None):
@@ -26,6 +27,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     params = load_params()
+    params_v1 = load_params_v1()
     grid = Grid.from_params(params)
     sub = params["region"]["subpixels"]
     n_classes = len(params["forest_classes"])
@@ -80,10 +82,60 @@ def main(argv=None):
         log.info("  TFV %6d  %s", v, k)
     raster = sources.rasterize_classes(geoms, grid, sub)
     del geoms
-    fractions = sources.block_fractions(raster, grid, sub, n_classes)
-    edge = sources.edge_density(raster, grid, sub)
-    del raster
-    forest_frac = fractions[:, :, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16]].sum(axis=2)
+    # V1 (pour comparaison) : classes BD Forêt brutes
+    n_v1 = len(params_v1["forest_classes"])
+    fractions_v1 = sources.block_fractions(raster, grid, sub, n_v1)
+    edge_v1 = sources.edge_density(raster, grid, sub, sources.FOREST_CLASSES_V1)
+    forest_frac_v1 = fractions_v1[:, :, sources.FOREST_CLASSES_V1].sum(axis=2)
+
+    # V1.1 : actualisation par le couvert arboré 2021 et les coupes détectées par satellite
+    wc = ly = None
+    try:
+        wc, wc_ok = sources.fetch_worldcover(grid, sub)
+        if not wc_ok:
+            wc = None
+    except Exception as ex:
+        log.warning("WorldCover indisponible : %s", ex)
+    try:
+        ly, ly_ver = sources.fetch_hansen_lossyear(session, grid, sub)
+    except Exception as ex:
+        log.warning("Hansen indisponible : %s", ex)
+        ly_ver = None
+    eff = sources.effective_classes(raster, wc, ly, params["habitat"])
+    change = {}
+    for a, b in [(14, 17), (0, 18)]:
+        change[f"{a}->{b}"] = int(((raster == a) & (eff == b)).sum())
+    change["foret->14 (coupe récente)"] = int((np.isin(raster, sources.FOREST_CLASSES_V1) & (eff == 14)).sum())
+    change["foret->17 (coupe 2009-2020)"] = int((np.isin(raster, sources.FOREST_CLASSES_V1) & (eff == 17)).sum())
+    px_ha = (grid.dlat / sub * 110574) * (grid.dlon / sub * 111320 * np.cos(np.radians(grid.lat0))) / 1e4
+    meta["sources"]["forest_update"] = {
+        "worldcover": bool(wc is not None), "hansen": ly_ver, "pixel_ha": round(px_ha, 3),
+        "changes_ha": {k: round(v * px_ha) for k, v in change.items()},
+        "note": "WorldCover 2021 (ESA, CC BY 4.0) ; Hansen/UMD Global Forest Change (CC BY 4.0).",
+    }
+    log.info("Actualisation forestière (ha) : %s", meta["sources"]["forest_update"]["changes_ha"])
+    del wc, ly
+    fractions = sources.block_fractions(eff, grid, sub, n_classes)
+    edge = sources.edge_density(eff, grid, sub)
+    del raster, eff
+    forest_frac = fractions[:, :, sources.FOREST_CLASSES].sum(axis=2)
+
+    # Lithologie BRGM (texture, réserve utile, pH indicatif, hydromorphie)
+    litho_r = None
+    try:
+        litho_r, litho_stats = sources.fetch_brgm_litho(grid, sub)
+        meta["sources"]["brgm"] = {"ok": litho_stats["ok"], "failed": litho_stats["failed"], "examples": litho_stats["texts"],
+                                   "name": "BRGM — cartes géologiques harmonisées 1/50 000 (BD Charm-50)"}
+    except Exception as ex:
+        log.warning("BRGM indisponible : %s", ex)
+        meta["sources"]["brgm"] = {"error": str(ex)[:300]}
+    n_lith = len(sources.LITHO)
+    if litho_r is not None:
+        lith_fr = sources.block_fractions(litho_r, grid, sub, n_lith)
+        del litho_r
+    else:
+        lith_fr = np.zeros((grid.size, grid.size, n_lith), dtype=np.float32)
+        lith_fr[:, :, 0] = 1
     meta["sources"]["bdforet"] = {
         "name": "IGN BD Forêt® V2", "layer": tn_forest, "licence": "Licence Ouverte Etalab 2.0",
         "url": "https://geoservices.ign.fr/bdforet", "polygons": int(sum(class_counter.values())),
@@ -117,11 +169,14 @@ def main(argv=None):
     access = {}
     tn_pub, r_pub, lab_pub = fetch_layer_raster([r"FORETS\.PUBLIQUES", r"FORET.*PUBLIQUE"], "Forêts publiques")
     access["pub_frac"] = sources.block_mean((r_pub > 0).astype(np.float32), grid, sub) if r_pub is not None else np.full((grid.size,) * 2, np.nan)
+    candidates = [x for x in names if re.search(r"protect|patrinat|reserv|biotop|apb|rnn|rnr|znieff|natura", x, re.I)]
+    meta["wfs_protected_candidates"] = candidates[:80]
+    log.info("Couches candidates aires protégées : %s", candidates[:80])
     prot_layers = [
-        ([r"PROTECTEDAREAS\.RN:", r"PROTECTEDAREAS\.RN\b"], "Réserve naturelle nationale"),
-        ([r"PROTECTEDAREAS\.RNR"], "Réserve naturelle régionale"),
-        ([r"PROTECTEDAREAS\.APB", r"PROTECTEDAREAS\.APPB"], "Arrêté de protection de biotope"),
-        ([r"PROTECTEDAREAS\.RB:", r"PROTECTEDAREAS\.RB\b"], "Réserve biologique"),
+        ([r"PROTECTEDAREAS\.RN:", r"PROTECTEDAREAS\.RN\b", r"(^|[:._])rnn([:._]|$)", r"reserves?_naturelles?_nationales?"], "Réserve naturelle nationale"),
+        ([r"PROTECTEDAREAS\.RNR", r"(^|[:._])rnr([:._]|$)", r"reserves?_naturelles?_regionales?"], "Réserve naturelle régionale"),
+        ([r"PROTECTEDAREAS\.APB", r"PROTECTEDAREAS\.APPB", r"(^|[:._])appb?([:._]|$)", r"biotope"], "Arrêté de protection de biotope"),
+        ([r"PROTECTEDAREAS\.RB:", r"PROTECTEDAREAS\.RB\b", r"reserves?_biologiques?"], "Réserve biologique"),
     ]
     prot_frac = np.zeros((grid.size, grid.size), dtype=np.float32)
     prot_name = np.full((grid.size, grid.size), -1, dtype=int)
@@ -153,7 +208,8 @@ def main(argv=None):
 
     # ---- 3. Communes -------------------------------------------------------------------
     communes = sources.fetch_communes(session)
-    sel = circle & (forest_frac >= params["region"]["min_forest_fraction"])
+    mf = params["region"]["min_forest_fraction"]
+    sel = circle & ((forest_frac >= mf) | (forest_frac_v1 >= mf))
     pts = np.column_stack([lon[sel], lat[sel]])
     com_idx = sources.assign_points(pts, communes)
     used = sorted(set(com_idx.tolist()))
@@ -178,13 +234,30 @@ def main(argv=None):
     meta["sources"]["dem"] = {"name": "Copernicus DEM GLO-30", "licence": "Licence Copernicus DEM (libre, attribution)", "ok": bool(dem["ok"])}
 
     # ---- 6. Habitat ----------------------------------------------------------------------
+    lf = lith_fr[sel].astype(float)                      # parts de lithologie par cellule
+    known = lf[:, 1:].sum(axis=1)
+    lith_major = np.where(known > 0.3, np.argmax(lf[:, 1:], axis=1) + 1, 0)
+    lith_ph = np.array([np.nan if x[3] is None else x[3] for x in sources.LITHO])
+    lith_ru = np.array([np.nan if x[2] is None else x[2] for x in sources.LITHO])
+    lith_hyd = np.array([x[4] for x in sources.LITHO])
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ph_litho = np.where(known > 0.3, (lf[:, 1:] * np.nan_to_num(lith_ph[1:])).sum(axis=1) / np.maximum(known, 1e-9), np.nan)
+        hydro = np.where(known > 0.3, (lf[:, 1:] * lith_hyd[1:]).sum(axis=1) / np.maximum(known, 1e-9), 0.0)
     cells_static = {
         "fractions": fractions[sel].astype(float), "forest_frac": forest_frac[sel].astype(float),
-        "edge": edge[sel].astype(float), "ph": soil["ph"][sel], "slope": dem["slope"][sel],
+        "edge": edge[sel].astype(float), "ph": ph_litho, "hydro": hydro, "slope": dem["slope"][sel],
         "north_share": dem["north_share"][sel], "tpi": dem["tpi"][sel],
     }
     H = habitat.habitat_scores(cells_static, params)
     mix = habitat.mix_index(cells_static["fractions"])
+    # V1 recalculée à l'identique pour la comparaison
+    cells_v1 = {
+        "fractions": fractions_v1[sel].astype(float), "forest_frac": forest_frac_v1[sel].astype(float),
+        "edge": edge_v1[sel].astype(float), "ph": soil["ph"][sel], "slope": dem["slope"][sel],
+        "north_share": dem["north_share"][sel], "tpi": dem["tpi"][sel],
+    }
+    H_v1 = habitat.habitat_scores(cells_v1, params_v1)
+    unk = (cells_static["fractions"][:, [17, 18]].sum(axis=1) / np.maximum(cells_static["forest_frac"], 1e-9))
 
     # ---- 7. Points météo -----------------------------------------------------------------
     rg = params["region"]
@@ -196,12 +269,23 @@ def main(argv=None):
     wp_lat = [round(grid.lat0 + a * rg["weather_dlat"], 4) for a, _ in keys]
     wp_lon = [round(grid.lon0 + b * rg["weather_dlon"], 4) for _, b in keys]
     log.info("%d cellules forestières, %d points météo", sel.sum(), len(keys))
+    # unités de calcul de l'humidité : (point météo × lithologie dominante)
+    ukeys = sorted(set(zip(wp_idx.tolist(), lith_major.tolist())))
+    uidx = {k: t for t, k in enumerate(ukeys)}
+    unit_idx = np.array([uidx[(a, b)] for a, b in zip(wp_idx.tolist(), lith_major.tolist())])
+    ru_default = params["moisture"]["ru_default_mm"]
+    units = {"wp": [a for a, _ in ukeys], "lith": [b for _, b in ukeys],
+             "ru": [float(ru_default if np.isnan(lith_ru[b]) else lith_ru[b]) for _, b in ukeys]}
+    log.info("%d unités de calcul de l'humidité (point météo × lithologie)", len(ukeys))
 
     # ---- 8. Confiance statique -----------------------------------------------------------
     conf = np.full(sel.sum(), 85.0)
-    conf -= np.where(np.isfinite(cells_static["ph"]), 0, 10)
+    conf -= np.where(lith_major > 0, 0, 10)                       # sol/lithologie inconnus
     conf -= np.where(np.isfinite(cells_static["slope"]), 0, 5)
     conf -= np.where(cells_static["forest_frac"] < 0.15, 10, 0)
+    conf -= 20 * np.clip(unk, 0, 1)                               # essence non cartographiée
+    if not meta["sources"]["forest_update"]["worldcover"] or not meta["sources"]["forest_update"]["hansen"]:
+        conf -= 5
 
     # ---- 9. Écriture ------------------------------------------------------------------------
     ii, jj = np.where(sel)  # ii : ligne sud→nord (0..2N), jj : colonne
@@ -229,23 +313,31 @@ def main(argv=None):
         "pub": ints(access["pub_frac"][sel], 100), "prot": ints(prot_frac[sel], 100), "protn": prot_name[sel].tolist(),
         "conf": ints(conf),
         "H": {s: ints(H[s], 100) for s in params["species"]},
+        "H_v1": {s: ints(H_v1[s], 100) for s in params["species"]},
+        "unit": unit_idx.tolist(), "lith": lith_major.tolist(), "hydro": ints(hydro, 100), "unk": ints(unk, 100),
+        "forest_v1": ints(cells_v1["forest_frac"], 100),
     }
     out = {
         "version": params["version"], "generated_at": meta["generated_at"],
         "grid": {"lat0": grid.lat0, "lon0": grid.lon0, "dlat": grid.dlat, "dlon": grid.dlon, "n": grid.n, "radius_km": grid.radius_km},
         "communes": commune_names, "commune_codes": commune_codes, "protected_names": prot_names,
         "weather_points": {"lat": wp_lat, "lon": wp_lon},
+        "units": units,
+        "lithology": [{"key": x[0], "label": x[1], "ru_mm": x[2], "ph": x[3], "hydro": x[4]} for x in sources.LITHO],
         "cells": cells,
     }
     write_json(DATA_DIR / "static" / "cells.json", out)
 
     # résumé de contrôle
     for s in params["species"]:
-        h = np.asarray(cells["H"][s])
-        log.info("Habitat %-12s : médiane %3d, p90 %3d, max %3d", s, np.median(h), np.percentile(h, 90), h.max())
+        h = np.asarray(cells["H"][s]); h1 = np.asarray(cells["H_v1"][s])
+        log.info("Habitat %-12s : V1.1 médiane %3d p90 %3d | V1 médiane %3d p90 %3d", s, np.median(h), np.percentile(h, 90), np.median(h1), np.percentile(h1, 90))
+    meta["lithology_share"] = {sources.LITHO_KEYS[k]: round(float((lith_major == k).mean()), 3) for k in range(len(sources.LITHO))}
     meta["summary"] = {"cells": int(sel.sum()), "weather_points": len(keys),
                        "habitat_p50": {s: float(np.median(cells["H"][s])) for s in params["species"]},
-                       "habitat_p90": {s: float(np.percentile(cells["H"][s], 90)) for s in params["species"]}}
+                       "habitat_p90": {s: float(np.percentile(cells["H"][s], 90)) for s in params["species"]},
+                       "habitat_v1_p50": {s: float(np.median(cells["H_v1"][s])) for s in params["species"]},
+                       "units": len(units["wp"])}
 
     # ---- 10. GBIF -----------------------------------------------------------------------------
     if not args.skip_gbif:

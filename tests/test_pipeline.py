@@ -22,6 +22,7 @@ def fake_fetch(session, lats, lons, past_days, forecast_days=8, budget=None):
     data["et0"] = np.full((n, m), 1.2)
     data["tsoil"] = np.full((n, m), 13.5)
     data["sm"] = np.full((n, m), 0.25)
+    data["sm2"] = np.full((n, m), 0.28)
     data["precip"][1, :] = np.nan  # un point défaillant
     if budget is not None:
         budget["weight"] += 1
@@ -33,7 +34,9 @@ def test_update_end_to_end(tmp_path, monkeypatch):
     P = load_params()
     static = {
         "weather_points": {"lat": [44.8, 44.9, 45.0, 44.7], "lon": [-0.6, -0.7, -0.8, -0.5]},
-        "cells": {"wp": [0, 0, 1, 2], "H": {s: [80, 40, 60, 10] for s in P["species"]}},
+        "units": {"wp": [0, 1, 2, 3], "lith": [1, 0, 7, 0], "ru": [22, 35, 45, 35]},
+        "cells": {"wp": [0, 0, 1, 2], "unit": [0, 0, 1, 2], "H": {s: [80, 40, 60, 10] for s in P["species"]},
+                  "H_v1": {s: [70, 40, 50, 10] for s in P["species"]}},
     }
     (tmp_path / "static").mkdir()
     (tmp_path / "static" / "cells.json").write_text(json.dumps(static))
@@ -43,7 +46,10 @@ def test_update_end_to_end(tmp_path, monkeypatch):
     latest = json.loads((tmp_path / "forecast" / "latest.json").read_text())
     assert len(latest["dates"]) == 15 and latest["today"] in latest["dates"]
     assert latest["bad_points"] == [1]
-    assert all(v == 255 for d in latest["W"]["edulis"] for k, v in enumerate(d) if k == 1)
+    assert all(v == 255 for d in latest["W"]["edulis"] for k, v in enumerate(d) if k == 1)  # unité du point absent
+    assert all(v == 255 for d in latest["W_v1"]["edulis"] for k, v in enumerate(d) if k == 1)
+    assert len(latest["uconf"][0]) == 4 and latest["uconf"][0][1] == 0
+    assert "qc" in latest and latest["summary_v1"]["all"]
     assert (tmp_path / "forecast" / "points" / "2.json").exists()
     st = json.loads((tmp_path / "status.json").read_text())
     assert st["ok"]

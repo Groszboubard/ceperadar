@@ -820,9 +820,18 @@ def fetch_inrae_ru(grid, sub):
     meta, _, geoms, fields = pyogrio.raw.read(shps[0])
     names = list(meta["fields"])
     stats["fields"] = names
-    # champ portant la réserve utile : nom contenant « RU », sinon premier champ texte avec « mm »
-    cand = [i for i, n in enumerate(names) if re.search(r"ru|reserve|classe", n, re.I)]
+    # Champ portant la classe de réserve utile. Les champs RESERVE_ / RESERVE_ID / AREA /
+    # PERIMETER sont des identifiants ou des géométries : ils ne doivent JAMAIS être lus comme
+    # des millimètres. Seules des valeurs textuelles exprimées en mm sont acceptées.
+    cand = [i for i, n in enumerate(names) if re.fullmatch(r"(classe|classe_ru|ru|lib.*|libelle.*|class.*)", n, re.I)]
     stats["ru_field"] = [names[i] for i in cand]
+    distinct = {}
+    for i in cand:
+        vals = {}
+        for v in fields[i]:
+            vals[str(v)] = vals.get(str(v), 0) + 1
+        distinct[names[i]] = sorted(vals.items(), key=lambda x: -x[1])[:20]
+    stats["distinct_values"] = distinct
     crs = meta.get("crs") or "EPSG:27582"
     tr = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
     w, s_, e, n = grid.bounds
@@ -833,8 +842,11 @@ def fetch_inrae_ru(grid, sub):
         if wkb is None:
             continue
         val = np.nan
-        for i in cand + [j for j in range(len(names)) if j not in cand]:
-            val = _parse_ru_class(fields[i][k])
+        for i in cand:
+            raw = fields[i][k]
+            if not isinstance(raw, str) or "mm" not in raw.lower():
+                continue  # code de classe numérique sans libellé : non interprétable
+            val = _parse_ru_class(raw)
             if np.isfinite(val):
                 examples[str(fields[i][k])] = round(val)
                 break

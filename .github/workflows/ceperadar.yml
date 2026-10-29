@@ -1,0 +1,181 @@
+name: CèpeRadar — calcul et publication
+
+on:
+  schedule:
+    # GitHub n'accepte que l'UTC : deux horaires couvrent l'heure d'hiver et d'été, le script
+    # ne garde que celui qui tombe à la bonne heure de Paris. Le troisième sert de rattrapage.
+    - cron: "30 17 * * *"   # 19 h 30 Paris en été
+    - cron: "30 18 * * *"   # 19 h 30 Paris en hiver
+    - cron: "45 19 * * *"   # rattrapage du soir
+    - cron: "30 3 * * *"    # 5 h 30 Paris en été
+    - cron: "30 4 * * *"    # 5 h 30 Paris en hiver
+    - cron: "45 5 * * *"    # rattrapage du matin
+    - cron: "0 2 3 * *"     # le 3 de chaque mois : couches permanentes + validation historique
+  workflow_dispatch:
+    inputs:
+      rebuild_static:
+        description: "Reconstruire les couches permanentes (forêt, sol, relief…)"
+        type: boolean
+        default: false
+      backtest:
+        description: "Relancer la validation historique"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ["web/**", "pipeline/**", "model/**", ".github/workflows/**"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ceperadar
+  cancel-in-progress: false
+
+env:
+  CEPERADAR_DATA: ${{ github.workspace }}/databranch
+
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    outputs:
+      ran: ${{ steps.plan.outputs.ran }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Choisir le type d'exécution (heure de Paris)
+        id: plan
+        run: |
+          H=$(TZ=Europe/Paris date +%-H)
+          DOM=$(TZ=Europe/Paris date +%-d)
+          KIND=skip; STATIC=false; BACKTEST=false
+          case "${{ github.event_name }}" in
+            workflow_dispatch) KIND=manual; STATIC=${{ inputs.rebuild_static || false }}; BACKTEST=${{ inputs.backtest || false }} ;;
+            push) KIND=publish ;;
+            schedule)
+              if [ "${{ github.event.schedule }}" = "0 2 3 * *" ]; then KIND=manual; STATIC=true; BACKTEST=true;
+              elif [ "$H" -ge 19 ] && [ "$H" -le 22 ]; then KIND=evening;
+              elif [ "$H" -ge 5 ] && [ "$H" -le 8 ]; then KIND=morning; fi ;;
+          esac
+          echo "Heure de Paris : ${H} h → $KIND (statique=$STATIC, backtest=$BACKTEST)"
+          echo "kind=$KIND" >> "$GITHUB_OUTPUT"
+          echo "static=$STATIC" >> "$GITHUB_OUTPUT"
+          echo "backtest=$BACKTEST" >> "$GITHUB_OUTPUT"
+          [ "$KIND" = "skip" ] && echo "ran=false" >> "$GITHUB_OUTPUT" || echo "ran=true" >> "$GITHUB_OUTPUT"
+
+      - name: Récupérer la branche de données
+        if: steps.plan.outputs.kind != 'skip'
+        run: |
+          mkdir -p "$CEPERADAR_DATA"
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git fetch --depth 1 origin data
+            git --work-tree="$CEPERADAR_DATA" checkout origin/data -- .
+            git reset -q
+            echo "Données existantes :"; ls -la "$CEPERADAR_DATA"
+          else
+            echo "Pas encore de branche data : premier lancement."
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.plan.outputs.kind != 'skip' && steps.plan.outputs.kind != 'publish'
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installer les dépendances
+        if: steps.plan.outputs.kind != 'skip' && steps.plan.outputs.kind != 'publish'
+        run: pip install -r requirements.txt
+
+      - name: Tests du moteur
+        if: steps.plan.outputs.kind != 'skip' && steps.plan.outputs.kind != 'publish'
+        run: python -m pytest -q tests
+
+      - name: Couches permanentes (forêt, sol, relief, accès, observations)
+        if: steps.plan.outputs.kind != 'skip' && steps.plan.outputs.kind != 'publish'
+        run: |
+          if [ "${{ steps.plan.outputs.static }}" = "true" ] || [ ! -f "$CEPERADAR_DATA/static/cells.json" ]; then
+            python -m pipeline.build_static
+            echo "NEW_STATIC=1" >> "$GITHUB_ENV"
+          else
+            echo "Couches permanentes déjà présentes."
+          fi
+
+      - name: Actualisation météo et scores
+        id: update
+        if: steps.plan.outputs.kind != 'skip' && steps.plan.outputs.kind != 'publish'
+        continue-on-error: true
+        run: |
+          KIND=${{ steps.plan.outputs.kind }}
+          ARGS="--kind $KIND"
+          [ "$KIND" != "manual" ] && ARGS="$ARGS --max-age-hours 6"
+          for attempt in 1 2 3; do
+            if python -m pipeline.update $ARGS; then exit 0; fi
+            echo "Échec (tentative $attempt), nouvel essai dans 4 min"; sleep 240
+          done
+          exit 1
+
+      - name: Validation historique
+        if: (steps.plan.outputs.backtest == 'true' || env.NEW_STATIC == '1') && steps.plan.outputs.kind != 'publish' && steps.plan.outputs.kind != 'skip'
+        continue-on-error: true
+        timeout-minutes: 60
+        run: python -m pipeline.backtest
+
+      - name: Enregistrer les données (branche data, sans historique git)
+        if: steps.plan.outputs.kind != 'skip' && steps.plan.outputs.kind != 'publish'
+        run: |
+          cd "$CEPERADAR_DATA"
+          rm -rf .git
+          git init -q -b data
+          git config user.name "ceperadar-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Données $(TZ=Europe/Paris date '+%Y-%m-%d %H:%M') (${{ steps.plan.outputs.kind }})"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
+          du -sh .
+
+      - name: Signaler l'échec de l'actualisation
+        if: steps.update.outcome == 'failure'
+        run: |
+          echo "::error::L'actualisation a échoué ; le site conserve le dernier jeu de données valide."
+          cat "$CEPERADAR_DATA/status_failed.json" || true
+
+  deploy:
+    needs: compute
+    if: needs.compute.outputs.ran == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Construire l'interface
+        working-directory: web
+        run: |
+          npm ci
+          npm test
+          VITE_BASE="/${{ github.event.repository.name }}/" npm run build
+      - name: Ajouter les données publiées
+        run: |
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git fetch --depth 1 origin data
+            mkdir -p web/dist/data
+            git --work-tree=web/dist/data checkout origin/data -- .
+            git reset -q
+            rm -rf web/dist/data/cache   # cache météo brut : inutile en ligne
+          fi
+          touch web/dist/.nojekyll
+          du -sh web/dist; ls web/dist/data || true
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+      - id: pages
+        uses: actions/deploy-pages@v4

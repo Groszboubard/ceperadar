@@ -561,7 +561,7 @@ def classify_litho(text: str) -> int:
         return k("graves")
     if any(w in t for w in ("limon", "molasse", "colluvion", "loess")):
         return k("limon")
-    if "sable" in t or "sablo" in t:
+    if "sable" in t or "sablo" in t or "gres" in t:
         return k("sable")
     if "alluvion" in t or "argile" in t:
         return k("argile_alluvions")
@@ -588,8 +588,7 @@ def fetch_brgm_litho(grid, sub, departements=("33", "40", "47", "24", "17", "16"
     roi = box(w, s, e, n)
     for d in departements:
         content = None
-        for url in (f"https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_{d}.zip",
-                    f"http://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_{d}.zip"):
+        for url in (f"https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_{int(d):03d}.zip",):
             try:
                 r = requests.get(url, timeout=900, headers={"User-Agent": "Mozilla/5.0 (CepeRadar/1.1; usage personnel)"}, allow_redirects=True)
                 if r.status_code == 200 and r.content[:2] == b"PK":
@@ -664,66 +663,50 @@ def fetch_brgm_litho(grid, sub, departements=("33", "40", "47", "24", "17", "16"
 
 
 def _brgm_wfs_shapes(grid, stats):
-    """Interroge le WFS géologie du BRGM ; garde la première couche de formations géologiques."""
-    import requests
-    import xml.etree.ElementTree as ET
-    from shapely.geometry import shape as shp_shape
+    """Repli : carte lithologique simplifiée de la France à 1/1 000 000 (WFS BRGM, MapServer).
 
-    sess = requests.Session()
-    found = []
-    base_used = None
-    for base in ("https://geoservices.brgm.fr/geologie", "http://geoservices.brgm.fr/geologie"):
-        try:
-            r = sess.get(base, params={"SERVICE": "WFS", "REQUEST": "GetCapabilities"}, timeout=120)
-            root = ET.fromstring(r.content)
-            for el in root.iter():
-                if el.tag.endswith("FeatureType"):
-                    for ch in el:
-                        if ch.tag.endswith("Name") and ch.text:
-                            found.append(ch.text.strip())
-            base_used = base
-            break
-        except Exception as ex:
-            stats["errors"].append(f"WFS {base} : {str(ex)[:200]}")
-    stats["wfs_typenames"] = found[:200]
-    cands = [x for x in found if re.search(r"FGEOL|S_FGEOL|formation|GEO050K|lithol|geol", x, re.I) and not re.search(r"L_|_L$|point|ligne|contour", x, re.I)]
-    stats["wfs_candidates"] = cands[:40]
-    if not cands or not base_used:
+    Lue avec GDAL/OGR (pyogrio), qui gère le GML et la pagination du WFS.
+    """
+    import pyogrio
+    import shapely
+    from pyproj import Transformer
+    from shapely.geometry import box
+
+    base = "https://geoservices.brgm.fr/geologie"
+    layers = pyogrio.list_layers(f"WFS:{base}?SERVICE=WFS")
+    names = [str(x[0]) for x in layers]
+    stats["wfs_typenames"] = names[:200]
+    cands = [x for x in names if re.search(r"LITHO", x, re.I)] + \
+            [x for x in names if re.search(r"FGEOL|GEO050K|formation", x, re.I)]
+    stats["wfs_candidates"] = cands[:20]
+    if not cands:
         return []
-    tn = sorted(cands, key=lambda x: (0 if re.search(r"FGEOL|formation", x, re.I) else 1, len(x)))[0]
+    tn = cands[0]
+    meta, _, geoms, fields = pyogrio.raw.read(f"WFS:{base}?SERVICE=WFS", layer=tn)
+    crs = meta.get("crs") or "EPSG:4326"
+    names_f = list(meta["fields"])
+    stats["wfs_fields"] = names_f
+    tr = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
+    w, s_, e, n = grid.bounds
+    roi = box(w, s_, e, n)
     shapes = []
-    w, s, e, n = grid.bounds
-    for tb in tiles(grid.bounds, 0.25):
-        params = {"SERVICE": "WFS", "VERSION": "2.0.0", "REQUEST": "GetFeature", "TYPENAMES": tn, "OUTPUTFORMAT": "geojson",
-                  "SRSNAME": "EPSG:4326", "BBOX": f"{tb[1]},{tb[0]},{tb[3]},{tb[2]},urn:ogc:def:crs:EPSG::4326", "COUNT": "5000"}
-        r = sess.get(base_used, params=params, timeout=300)
-        try:
-            data = r.json()
-        except Exception:
-            params["OUTPUTFORMAT"] = "application/json"
-            r = sess.get(base_used, params=params, timeout=300)
-            try:
-                data = r.json()
-            except Exception:
-                stats["errors"].append(f"WFS {tn} : réponse non JSON {r.text[:200]}")
-                return shapes
-        for f in data.get("features", []):
-            if not f.get("geometry"):
-                continue
-            g = shp_shape(f["geometry"])
-            text = " ".join(str(v) for v in (f.get("properties") or {}).values() if isinstance(v, str))
-            c = classify_litho(text)
-            key = LITHO_KEYS[c]
-            stats["texts"].setdefault(key, {})
-            stats["texts"][key][text[:90]] = stats["texts"][key].get(text[:90], 0) + 1
-            if c > 0:
-                c0 = g.representative_point()
-                if not (w - 1 <= c0.x <= e + 1):  # axes inversés
-                    from shapely.ops import transform
-                    g = transform(lambda x, y, z=None: (y, x), g)
-                shapes.append((g, c))
+    for k, wkb in enumerate(geoms):
+        if wkb is None:
+            continue
+        g = shapely.from_wkb(wkb)
+        g = shapely.transform(g, lambda xy: np.column_stack(tr.transform(xy[:, 0], xy[:, 1])))
+        if not g.intersects(roi):
+            continue
+        text = " ".join(str(fields[i][k]) for i in range(len(names_f)) if isinstance(fields[i][k], str))
+        c = classify_litho(text)
+        key = LITHO_KEYS[c]
+        stats["texts"].setdefault(key, {})
+        stats["texts"][key][text[:90]] = stats["texts"][key].get(text[:90], 0) + 1
+        if c > 0:
+            shapes.append((g, c))
     stats["wfs_layer"] = tn
-    log.info("WFS BRGM %s : %d polygones utiles", tn, len(shapes))
+    stats["scale"] = "1/1 000 000" if "1M" in tn.upper() else "inconnue"
+    log.info("WFS BRGM %s (%s) : %d polygones utiles, champs %s", tn, crs, len(shapes), names_f)
     return shapes
 
 

@@ -742,3 +742,113 @@ def saxton_rawls_ru(sand_pct, clay_pct, soc_gkg, depth_mm=300):
     t33 = -0.251 * S + 0.195 * C + 0.011 * OM + 0.006 * S * OM - 0.027 * C * OM + 0.452 * S * C + 0.299
     fc = t33 + (1.283 * t33 ** 2 - 0.374 * t33 - 0.015)
     return (fc - wp) * depth_mm
+
+
+# ---------------------------------------------------------------------------
+# V1.1 — Réserve utile des sols (INRAE / GIS Sol, BDGSF 1/1 000 000, Licence Ouverte)
+# ---------------------------------------------------------------------------
+INRAE_RU_DOI = "doi:10.15454/JPB9RB"
+
+
+def _parse_ru_class(text) -> float:
+    """« 50 à 100 mm », « < 50 », « > 200 » … → valeur centrale en mm (NaN si illisible)."""
+    if text is None:
+        return np.nan
+    if isinstance(text, (int, float)) and np.isfinite(text):
+        return float(text) if text > 20 else np.nan  # un code de classe (1, 2, 3…) n'est pas une valeur
+    nums = [float(x.replace(",", ".")) for x in re.findall(r"\d+(?:[.,]\d+)?", str(text))]
+    if not nums:
+        return np.nan
+    t = str(text)
+    if len(nums) >= 2:
+        return (nums[0] + nums[1]) / 2
+    if "<" in t or "inf" in t.lower() or "moins" in t.lower():
+        return nums[0] * 0.75
+    if ">" in t or "sup" in t.lower() or "plus" in t.lower():
+        return nums[0] * 1.15
+    return nums[0]
+
+
+def fetch_inrae_ru(grid, sub):
+    """Rastérise la réserve utile (mm, profil entier) de la BDGSF sur la sous-grille."""
+    import os
+    import tempfile
+    import zipfile
+
+    import pyogrio
+    import requests
+    import shapely
+    from pyproj import Transformer
+    from rasterio.features import rasterize
+    from rasterio.transform import from_origin
+    from shapely.geometry import box
+
+    stats = {"errors": []}
+    sess = requests.Session()
+    sess.headers["User-Agent"] = "Mozilla/5.0 (CepeRadar/1.1; usage personnel)"
+    files = None
+    base = None
+    for b in ("https://entrepot.recherche.data.gouv.fr", "https://data.inrae.fr"):
+        try:
+            r = sess.get(f"{b}/api/datasets/:persistentId/", params={"persistentId": INRAE_RU_DOI}, timeout=120)
+            files = r.json()["data"]["latestVersion"]["files"]
+            base = b
+            break
+        except Exception as ex:
+            stats["errors"].append(f"{b} : {str(ex)[:200]}")
+    if not files:
+        return None, stats
+    stats["files"] = [f["dataFile"]["filename"] for f in files]
+    tmp = tempfile.mkdtemp()
+    for f in files:
+        name = f["dataFile"]["filename"]
+        if not re.search(r"\.(shp|shx|dbf|prj|cpg|zip)$", name, re.I):
+            continue
+        r = sess.get(f"{base}/api/access/datafile/{f['dataFile']['id']}", params={"format": "original"}, timeout=600)
+        if r.status_code != 200:
+            stats["errors"].append(f"{name} : HTTP {r.status_code}")
+            continue
+        path = os.path.join(tmp, name)
+        open(path, "wb").write(r.content)
+        if name.lower().endswith(".zip"):
+            with zipfile.ZipFile(path) as z:
+                z.extractall(tmp)
+    shps = [os.path.join(dp, x) for dp, _, fs in os.walk(tmp) for x in fs if x.lower().endswith(".shp")]
+    stats["shapefiles"] = [os.path.basename(x) for x in shps]
+    if not shps:
+        return None, stats
+    meta, _, geoms, fields = pyogrio.raw.read(shps[0])
+    names = list(meta["fields"])
+    stats["fields"] = names
+    # champ portant la réserve utile : nom contenant « RU », sinon premier champ texte avec « mm »
+    cand = [i for i, n in enumerate(names) if re.search(r"ru|reserve|classe", n, re.I)]
+    stats["ru_field"] = [names[i] for i in cand]
+    crs = meta.get("crs") or "EPSG:27582"
+    tr = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
+    w, s_, e, n = grid.bounds
+    roi = box(w, s_, e, n)
+    shapes = []
+    examples = {}
+    for k, wkb in enumerate(geoms):
+        if wkb is None:
+            continue
+        val = np.nan
+        for i in cand + [j for j in range(len(names)) if j not in cand]:
+            val = _parse_ru_class(fields[i][k])
+            if np.isfinite(val):
+                examples[str(fields[i][k])] = round(val)
+                break
+        if not np.isfinite(val):
+            continue
+        g = shapely.from_wkb(wkb)
+        g = shapely.transform(g, lambda xy: np.column_stack(tr.transform(xy[:, 0], xy[:, 1])))
+        if g.intersects(roi):
+            shapes.append((g, int(np.clip(round(val), 1, 255))))
+    stats["classes"] = examples
+    stats["n_polygons"] = len(shapes)
+    log.info("INRAE BDGSF réserve utile : %d polygones, classes %s", len(shapes), examples)
+    if not shapes:
+        return None, stats
+    r = rasterize(shapes, out_shape=(grid.size * sub, grid.size * sub),
+                  transform=from_origin(w, n, grid.dlon / sub, grid.dlat / sub), fill=0, dtype="uint8")
+    return r, stats

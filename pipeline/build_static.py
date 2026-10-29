@@ -131,6 +131,21 @@ def main(argv=None):
     except Exception as ex:
         log.warning("BRGM indisponible : %s", ex)
         meta["sources"]["brgm"] = {"error": str(ex)[:300]}
+    # Réserve utile des sols INRAE (BDGSF 1/1 000 000) : profil entier → couche 0-30 cm (≈ 1/3)
+    ru_prof = np.full((grid.size, grid.size), np.nan)
+    try:
+        ru_r, ru_stats = sources.fetch_inrae_ru(grid, sub)
+        meta["sources"]["inrae_ru"] = {**ru_stats, "name": "INRAE / GIS Sol — réserve utile, BDGSF 1/1 000 000", "licence": "Licence Ouverte 2.0"}
+        if ru_r is not None:
+            nb = grid.size
+            tot = ru_r.reshape(nb, sub, nb, sub).astype(np.float32).sum(axis=(1, 3))
+            cnt = (ru_r > 0).reshape(nb, sub, nb, sub).sum(axis=(1, 3))
+            with np.errstate(invalid="ignore", divide="ignore"):
+                ru_prof = np.where(cnt > 0, tot / np.maximum(cnt, 1), np.nan)[::-1, :]
+            del ru_r
+    except Exception as ex:
+        log.warning("Réserve utile INRAE indisponible : %s", ex)
+        meta["sources"]["inrae_ru"] = {"error": str(ex)[:300]}
     n_lith = len(sources.LITHO)
     if litho_r is not None:
         lith_fr = sources.block_fractions(litho_r, grid, sub, n_lith)
@@ -271,18 +286,33 @@ def main(argv=None):
     wp_lat = [round(grid.lat0 + a * rg["weather_dlat"], 4) for a, _ in keys]
     wp_lon = [round(grid.lon0 + b * rg["weather_dlon"], 4) for _, b in keys]
     log.info("%d cellules forestières, %d points météo", sel.sum(), len(keys))
-    # unités de calcul de l'humidité : (point météo × lithologie dominante)
-    ukeys = sorted(set(zip(wp_idx.tolist(), lith_major.tolist())))
+    # unités de calcul de l'humidité : point météo × lithologie dominante × classe de réserve utile
+    mpar = params["moisture"]
+    ru30_cell = np.clip(ru_prof[sel] / 3.0, mpar["ru_min_mm"], mpar["ru_max_mm"])
+    ru_bin = np.where(np.isfinite(ru30_cell), np.digitize(np.nan_to_num(ru30_cell), [20, 28, 38, 50, 65]), -1)
+    keys3 = list(zip(wp_idx.tolist(), lith_major.tolist(), ru_bin.tolist()))
+    ukeys = sorted(set(keys3))
     uidx = {k: t for t, k in enumerate(ukeys)}
-    unit_idx = np.array([uidx[(a, b)] for a, b in zip(wp_idx.tolist(), lith_major.tolist())])
-    ru_default = params["moisture"]["ru_default_mm"]
-    units = {"wp": [a for a, _ in ukeys], "lith": [b for _, b in ukeys],
-             "ru": [float(ru_default if np.isnan(lith_ru[b]) else lith_ru[b]) for _, b in ukeys]}
+    unit_idx = np.array([uidx[k] for k in keys3])
+    ru_default = mpar["ru_default_mm"]
+    unit_ru = []
+    for t, (a, b, c) in enumerate(ukeys):
+        if not np.isnan(lith_ru[b]):
+            unit_ru.append(float(lith_ru[b]))           # géologie BRGM 1/50 000 (prioritaire)
+        elif c >= 0:
+            unit_ru.append(float(np.nanmedian(ru30_cell[unit_idx == t])))  # sols INRAE 1/1 000 000
+        else:
+            unit_ru.append(float(ru_default))
+    units = {"wp": [a for a, _, _ in ukeys], "lith": [b for _, b, _ in ukeys], "ru": [round(x, 1) for x in unit_ru]}
+    meta["ru_source_share"] = {"brgm": round(float((lith_major > 0).mean()), 3),
+                               "inrae": round(float(((lith_major == 0) & np.isfinite(ru30_cell)).mean()), 3),
+                               "defaut": round(float(((lith_major == 0) & ~np.isfinite(ru30_cell)).mean()), 3)}
+    log.info("Origine de la réserve utile : %s", meta["ru_source_share"])
     log.info("%d unités de calcul de l'humidité (point météo × lithologie)", len(ukeys))
 
     # ---- 8. Confiance statique -----------------------------------------------------------
     conf = np.full(sel.sum(), 85.0)
-    conf -= np.where(lith_major > 0, 0, 10)                       # sol/lithologie inconnus
+    conf -= np.where(lith_major > 0, 0, np.where(np.isfinite(ru30_cell), 5, 10))  # sol connu au 1/50 000, au 1/1 000 000, ou inconnu
     conf -= np.where(np.isfinite(cells_static["slope"]), 0, 5)
     conf -= np.where(cells_static["forest_frac"] < 0.15, 10, 0)
     conf -= 20 * np.clip(unk, 0, 1)                               # essence non cartographiée
@@ -316,7 +346,7 @@ def main(argv=None):
         "conf": ints(conf),
         "H": {s: ints(H[s], 100) for s in params["species"]},
         "H_v1": {s: ints(H_v1[s], 100) for s in params["species"]},
-        "unit": unit_idx.tolist(), "lith": lith_major.tolist(), "hydro": ints(hydro, 100), "unk": ints(unk, 100),
+        "unit": unit_idx.tolist(), "lith": lith_major.tolist(), "ru": ints(ru30_cell), "hydro": ints(hydro, 100), "unk": ints(unk, 100),
         "forest_v1": ints(cells_v1["forest_frac"], 100),
     }
     out = {

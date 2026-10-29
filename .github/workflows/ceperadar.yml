@@ -121,7 +121,7 @@ jobs:
       - name: Planifier la validation historique
         id: val
         run: |
-          if [ "${{ steps.plan.outputs.backtest }}" = "true" ] || [ "${NEW_STATIC:-0}" = "1" ]; then echo "validate=true" >> "$GITHUB_OUTPUT"; else echo "validate=false" >> "$GITHUB_OUTPUT"; fi
+          if [ "${{ steps.plan.outputs.backtest }}" = "true" ] || { [ "${{ steps.plan.outputs.kind }}" != "publish" ] && [ ! -f "$CEPERADAR_DATA/static/backtest.json" ]; }; then echo "validate=true" >> "$GITHUB_OUTPUT"; else echo "validate=false" >> "$GITHUB_OUTPUT"; fi
 
       - name: Enregistrer les données (branche data, sans historique git)
         if: steps.plan.outputs.kind != 'skip' && steps.plan.outputs.kind != 'publish'

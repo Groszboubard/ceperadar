@@ -36,7 +36,9 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, diag, isF
   const lim = limitingFactor(st.cells.H[sp][cell], comp);
   const sIdx = pt ? pt.series_dates.indexOf(lt.dates[d]) - 1 : -1; // veille de la date cible
   const v1 = mode === "all" ? Math.max(...SPECIES.map((s) => cellScoreV1(st, lt, cell, s, d)).filter((x) => !Number.isNaN(x))) : cellScoreV1(st, lt, cell, mode, d);
-  const lith = st.lithology && st.cells.lith ? st.lithology[st.cells.lith[cell]] : null;
+  const lith0 = st.lithology && st.cells.lith ? st.lithology[st.cells.lith[cell]] : null;
+  const lith = lith0 && lith0.key !== "inconnue" ? lith0 : null;
+  const ruSrc = lith ? "géologie BRGM 1/50 000" : (st.cells as any).ru && (st.cells as any).ru[cell] >= 0 ? "carte des sols INRAE 1/1 000 000" : "valeur par défaut";
   const absent = Number.isNaN(score);
   const uncertain = !absent && conf < 50;
   const ex = explain(comp, day, sp);
@@ -90,7 +92,7 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, diag, isF
               <tr><th>Température T · saison S</th><td>{comp?.T != null ? Math.round(comp.T * 100) : "n. d."} · {comp?.S != null ? Math.round(comp.S * 100) : "n. d."}</td></tr>
               <tr><th>Qualité des données</th><td>{conf} / 100 (maille {st.cells.conf[cell]}, météo {wconf}){pt?.suspect ? " · point météo atypique" : ""}</td></tr>
               {ud && <tr><th>Humidité du sol (veille)</th><td>bilan hydrique {ud.rew_a[sIdx] ?? "n. d."} % · modèle météo {ud.rew_b[sIdx] ?? "n. d."} % → retenu {ud.rew[sIdx] ?? "n. d."} %{ud.dis[d] != null && ud.dis[d]! > 0.35 ? " (sources en désaccord)" : ""}</td></tr>}
-              {ud && <tr><th>Sol</th><td>{lith ? lith.label : "lithologie inconnue"} · réserve utile 0–30 cm ≈ {Math.round(ud.ru)} mm</td></tr>}
+              {ud && <tr><th>Sol</th><td>{lith ? lith.label + " · " : ""}réserve utile 0–30 cm ≈ {Math.round(ud.ru)} mm ({ruSrc})</td></tr>}
               {st.cells.unk && st.cells.unk[cell] > 0 && <tr><th>Essence non cartographiée</th><td>{st.cells.unk[cell]} % des boisements de la maille</td></tr>}
               {!Number.isNaN(v1) && <tr><th>Score V1 → V1.1</th><td>{v1} → {absent ? "n. d." : score} ({st.cells.H_v1 ? `habitat ${st.cells.H_v1[sp][cell]} → ${st.cells.H[sp][cell]}` : ""}{lt.W_v1 ? `, météo ${lt.W_v1[sp][d][wp]} → ${cellW(st, lt, cell, sp, d)}` : ""})</td></tr>}
             </tbody>
@@ -175,11 +177,11 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, diag, isF
           <tbody>
             <tr><th>Peuplement</th><td>{comps.map((x) => `${CLASS_LABEL[x.c]} (${x.p} %)`).join(", ") || "n. d."}</td></tr>
             <tr><th>Lisières / mélange</th><td>densité de lisière {st.cells.edge[cell]} % · mélange d'essences {st.cells.mix[cell]} %</td></tr>
-            <tr><th>Géologie (BRGM)</th><td>{lith ? `${lith.label}${lith.ph ? ` · pH indicatif ≈ ${lith.ph}` : ""}` : "n. d."}{st.cells.hydro && st.cells.hydro[cell] >= 30 ? " · sols souvent engorgés" : ""}</td></tr>
+            <tr><th>Sol</th><td>{lith ? `${lith.label}${lith.ph ? ` · pH indicatif ≈ ${lith.ph}` : ""}` : "géologie non disponible"}{(st.cells as any).ru && (st.cells as any).ru[cell] >= 0 ? ` · réserve utile 0–30 cm ≈ ${(st.cells as any).ru[cell]} mm (${ruSrc})` : ""}{st.cells.hydro && st.cells.hydro[cell] >= 30 ? " · sols souvent engorgés" : ""}</td></tr>
             <tr><th>Relief</th><td>{st.cells.elev[cell] >= -50 ? `${st.cells.elev[cell]} m` : "n. d."} · pente {st.cells.slope[cell] >= 0 ? (st.cells.slope[cell] / 10).toFixed(1) + "°" : "n. d."} · position {st.cells.tpi[cell] < -2 ? "basse" : st.cells.tpi[cell] > 2 ? "haute" : "neutre"}</td></tr>
           </tbody>
         </table>
-        <p className="muted small">Peuplements : IGN BD Forêt® V2 actualisée par le couvert arboré ESA WorldCover 2021 et les coupes détectées par satellite (Hansen/UMD). Géologie : BRGM 1/50 000 (pH et réserve utile indicatifs par formation, pas des mesures à la parcelle). Relief : Copernicus DEM.</p>
+        <p className="muted small">Peuplements : IGN BD Forêt® V2 actualisée par le couvert arboré ESA WorldCover 2021 et les coupes détectées par satellite (Hansen/UMD). Sol : géologie BRGM 1/50 000 si disponible, sinon réserve utile INRAE 1/1 000 000 (valeurs indicatives, pas des mesures à la parcelle). Relief : Copernicus DEM.</p>
       </section>
 
       <section>

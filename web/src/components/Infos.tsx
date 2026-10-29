@@ -94,9 +94,9 @@ export default function Infos({ lt, st }: { lt: Latest; st: StaticData }) {
       <section>
         <h3>Comment le score est calculé</h3>
         <p><b>Score = Habitat × Météo / 100</b>, calculé par espèce. Un habitat inadapté ou une météo défavorable suffit donc à faire chuter le score.</p>
-        <p><b>Habitat</b> (permanent, maille de 1 km) : affinité de l'espèce pour chaque essence de la BD Forêt® V2 actualisée par satellite (couvert arboré 2021, coupes rases jusqu'en 2024), part boisée, lisières et mélange d'essences, pH indicatif et engorgement selon la géologie BRGM et, faiblement, la topographie.</p>
+        <p><b>Habitat</b> (permanent, maille de 1 km) : affinité de l'espèce pour chaque essence de la BD Forêt® V2 actualisée par satellite (couvert arboré 2021, coupes rases jusqu'en 2024), part boisée, lisières et mélange d'essences, pH indicatif et engorgement selon la géologie BRGM quand elle est disponible et, faiblement, la topographie.</p>
         <p><b>Météo</b> (point tous les ~6,5 km, mise à jour quotidienne) : pluie efficace sur une fenêtre de 1 à 5 semaines selon l'espèce et épisode pluvieux déclencheur, températures moyennes sur 20 j, 7 j et du sol, saisonnalité, pénalités de gel et de forte chaleur.</p>
-        <p><b>Humidité du sol</b> (V1.1) : réservoir de la couche 0–30 cm dont la capacité dépend de la géologie (sables landais ≈ 22 mm, alluvions ≈ 70 mm), avec interception par la canopée et pertes qui ralentissent quand le sol s'assèche, combiné à 40 % avec l'humidité modélisée par Open-Meteo (3–27 cm). Quand les deux sources divergent, la maille est hachurée « incertaine » plutôt que déclarée défavorable.</p>
+        <p><b>Humidité du sol</b> (V1.1) : réservoir de la couche 0–30 cm dont la capacité dépend du sol (carte INRAE de la réserve utile, ou géologie BRGM), avec interception par la canopée et pertes qui ralentissent quand le sol s'assèche, combiné à 40 % avec l'humidité modélisée par Open-Meteo (3–27 cm). Quand les deux sources divergent, la maille est hachurée « incertaine » plutôt que déclarée défavorable.</p>
         <p className="muted small">Les fenêtres reprennent notamment un suivi de dix ans de <i>B. edulis</i> en hêtraie (pluie utile sur ~26 jours, optimum thermique ~13 °C sur 20 jours). Les autres paramètres sont des a priori écologiques à recalibrer avec vos relevés. Détail complet : docs/MODELE.md dans le dépôt.</p>
         <p><b>Confiance</b> : élevée, moyenne ou faible selon la part de prévision dans le calcul, l'échéance, et la disponibilité des données de sol et de relief. Au-delà de J+3, la tendance est indicative.</p>
       </section>
@@ -155,7 +155,7 @@ export default function Infos({ lt, st }: { lt: Latest; st: StaticData }) {
           <li>Forêts publiques et aires protégées : Géoplateforme IGN / INPN.</li>
           <li>Météo : {lt.weather_source.name} — {lt.weather_source.licence}. {lt.weather_source.past}.</li>
           <li>Actualisation des peuplements : ESA WorldCover 2021 (CC BY 4.0) et Hansen/UMD Global Forest Change (CC BY 4.0).</li>
-          <li>Géologie : BRGM, cartes géologiques harmonisées à 1/50 000 (BD Charm-50).</li>
+          <li>Sols : réserve utile INRAE / GIS Sol (BDGSF 1/1 000 000, Licence Ouverte) ; géologie BRGM 1/50 000 lorsqu'elle est téléchargeable.</li>
           <li>Observations : GBIF.org et iNaturalist (dates et positions uniquement, pour la validation).</li>
           <li>Relief : Copernicus DEM GLO-30 (© DLR / Airbus, programme Copernicus).</li>
           <li>Observations : GBIF.org, contributeurs iNaturalist et autres jeux de données (CC0 / CC BY / CC BY-NC).</li>

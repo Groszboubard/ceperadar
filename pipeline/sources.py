@@ -672,17 +672,39 @@ def _brgm_wfs_shapes(grid, stats):
     from pyproj import Transformer
     from shapely.geometry import box
 
+    import requests
+    import tempfile
+    import xml.etree.ElementTree as ET
+
     base = "https://geoservices.brgm.fr/geologie"
-    layers = pyogrio.list_layers(f"WFS:{base}?SERVICE=WFS")
-    names = [str(x[0]) for x in layers]
+    sess = requests.Session()
+    sess.headers["User-Agent"] = "Mozilla/5.0 (CepeRadar/1.1; usage personnel)"
+    r = sess.get(base, params={"SERVICE": "WFS", "REQUEST": "GetCapabilities"}, timeout=120)
+    names = [el.text.strip() for el in ET.fromstring(r.content).iter() if el.tag.endswith("Name") and el.text and ":" in el.text]
     stats["wfs_typenames"] = names[:200]
-    cands = [x for x in names if re.search(r"LITHO", x, re.I)] + \
-            [x for x in names if re.search(r"FGEOL|GEO050K|formation", x, re.I)]
+    cands = [x for x in names if re.search(r"LITHO", x, re.I)] + [x for x in names if re.search(r"FGEOL|GEO050K|formation", x, re.I)]
     stats["wfs_candidates"] = cands[:20]
     if not cands:
         return []
     tn = cands[0]
-    meta, _, geoms, fields = pyogrio.raw.read(f"WFS:{base}?SERVICE=WFS", layer=tn)
+    meta = geoms = fields = None
+    for ver, extra in (("1.1.0", {"TYPENAME": tn}), ("1.0.0", {"TYPENAME": tn}), ("2.0.0", {"TYPENAMES": tn})):
+        rr = sess.get(base, params={"SERVICE": "WFS", "VERSION": ver, "REQUEST": "GetFeature", **extra}, timeout=600)
+        if rr.status_code != 200 or b"Rejected" in rr.content[:400] or b"Exception" in rr.content[:600]:
+            stats["errors"].append(f"WFS {tn} v{ver} : HTTP {rr.status_code} {rr.content[:150]!r}")
+            continue
+        with tempfile.NamedTemporaryFile(suffix=".gml", delete=False) as fh:
+            fh.write(rr.content)
+            path = fh.name
+        try:
+            meta, _, geoms, fields = pyogrio.raw.read(path)
+            stats["wfs_version"] = ver
+            stats["wfs_bytes"] = len(rr.content)
+            break
+        except Exception as ex:
+            stats["errors"].append(f"Lecture GML v{ver} : {str(ex)[:200]}")
+    if meta is None:
+        return []
     crs = meta.get("crs") or "EPSG:4326"
     names_f = list(meta["fields"])
     stats["wfs_fields"] = names_f

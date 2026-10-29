@@ -604,6 +604,8 @@
     "model_env_hi_pct": 95,
     "disagree": 0.35,
     "m_low": 0.05,
-    "m_high": 0.5
+    "m_high": 0.5,
+    "use_inrae_ru": false,
+    "_inrae_note": "Carte INRAE BDGSF des classes de RU désactivée : codes 1-5 sans légende publiée ; la conversion testée donnait la plus forte réserve aux dunes littorales, physiquement incohérent (29/10/2026)."
   }
 }

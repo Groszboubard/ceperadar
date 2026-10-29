@@ -134,6 +134,8 @@ def main(argv=None):
     # Réserve utile des sols INRAE (BDGSF 1/1 000 000) : profil entier → couche 0-30 cm (≈ 1/3)
     ru_prof = np.full((grid.size, grid.size), np.nan)
     try:
+        if not params["moisture"].get("use_inrae_ru", False):
+            raise RuntimeError("source désactivée (légende des classes non publiée, voir model/params.json)")
         ru_r, ru_stats = sources.fetch_inrae_ru(grid, sub)
         meta["sources"]["inrae_ru"] = {**ru_stats, "name": "INRAE / GIS Sol — réserve utile, BDGSF 1/1 000 000", "licence": "Licence Ouverte 2.0"}
         if ru_r is not None:

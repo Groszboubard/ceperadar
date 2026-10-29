@@ -38,7 +38,7 @@ export default function CellPanel({ st, lt, cell, d, mode, sectorName, diag, isF
   const v1 = mode === "all" ? Math.max(...SPECIES.map((s) => cellScoreV1(st, lt, cell, s, d)).filter((x) => !Number.isNaN(x))) : cellScoreV1(st, lt, cell, mode, d);
   const lith0 = st.lithology && st.cells.lith ? st.lithology[st.cells.lith[cell]] : null;
   const lith = lith0 && lith0.key !== "inconnue" ? lith0 : null;
-  const ruSrc = lith ? "géologie BRGM 1/50 000" : (st.cells as any).ru && (st.cells as any).ru[cell] >= 0 ? "carte des sols INRAE 1/1 000 000" : "valeur par défaut";
+  const ruSrc = lith ? "géologie BRGM 1/50 000" : (st.cells as any).ru && (st.cells as any).ru[cell] >= 0 ? "carte des sols INRAE 1/1 000 000" : "valeur unique faute de carte des sols exploitable";
   const absent = Number.isNaN(score);
   const uncertain = !absent && conf < 50;
   const ex = explain(comp, day, sp);

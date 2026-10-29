@@ -95,13 +95,29 @@ Inversement, les coupes rases récentes (dont les incendies de 2022) détectées
 déclassées même si la BD Forêt indique encore une pinède. Les boisements arborés en 2021 mais
 absents de la BD Forêt reçoivent une affinité prudente (essence inconnue) et une confiance réduite.
 
+## 4 bis. Sols : ce qui a été tenté, et ce qui est réellement utilisé
+
+| Source | Résultat | Décision |
+|---|---|---|
+| SoilGrids 250 m | texture et pH faux sur les sables (voir § 3) | **retiré** du score |
+| BRGM BD Charm-50 (InfoTerre) | renvoie une page web au lieu du fichier | code conservé, inactif tant que le téléchargement échoue |
+| BRGM WFS (lithologie 1/1 000 000) | le pare-feu du BRGM rejette les serveurs GitHub Actions | idem |
+| INRAE BDGSF « classes de RU » | fichier récupéré, mais codes 1-5 sans légende ; la conversion testée attribuait aux dunes littorales la plus forte réserve (58 mm) : incohérent | **désactivé** |
+
+En production, la réserve utile de la couche 0-30 cm est donc **une valeur unique de 35 mm** et le
+pH n'intervient plus (facteur neutre). La validation montre que l'AUC temporelle ne varie pas
+quand cette réserve passe de 22 à 55 mm : l'enjeu sur le classement est faible, mais la
+différenciation sables / sols argileux reste une limite connue. La géologie sera utilisée
+automatiquement si le BRGM redevient téléchargeable (reconstruction mensuelle).
+
 ## 5. Résolution météo
 
 360 points à ~9 km → ~690 points à ~6,5 km. Les précipitations d'Open-Meteo en France proviennent
 de modèles de 1,5 à 11 km (AROME en tête) : resserrer l'échantillonnage récupère une partie de la
 résolution réellement disponible ; aucune interpolation n'est ajoutée. L'humidité du sol est en
 outre différenciée par la géologie de chaque maille (unités point météo × lithologie), ce qui
-casse les grands aplats sans inventer de micro-météo. Contrôle de continuité : 2 points sur 360
+aurait cassé les grands aplats sans inventer de micro-météo ; faute de source de sol exploitable
+(§ 4 bis), cette différenciation n'est pas active aujourd'hui. Contrôle de continuité : 2 points sur 360
 avaient un cumul de pluie 30 j atypique par rapport à leurs voisins (est du domaine).
 
 ## 6. Ce qui n'a PAS été changé (et pourquoi)
@@ -110,3 +126,33 @@ avaient un cumul de pluie 30 j atypique par rapport à leurs voisins (est du dom
   pour les réestimer ; la sensibilité est mesurée dans la validation.
 - La structure multiplicative H × W : conservée (un habitat incompatible ou une vraie sécheresse
   doivent rester limitants), seuls les effets de seuil de l'humidité ont été corrigés.
+
+## 7. Validation historique (29/10/2026)
+
+61 observations publiques datées depuis 2015 dans le rayon de 100 km (51 iNaturalist, 10 GBIF ;
+35 cèpes de Bordeaux, 16 bronzés, 9 d'été, 1 des pins). Aucune n'a servi à régler un paramètre.
+Météo : ERA5 aux 15 mailles de 0,25° les plus observées.
+
+| Test (AUC ; 0,5 = hasard) | V1 | V1.1 |
+|---|---|---|
+| Date observée vs reste de l'année (n = 41) | 0,89 [0,87–0,92] | 0,89 [0,86–0,91] |
+| Référence « saison seule » | 0,82 [0,78–0,85] | |
+| Date observée vs ± 30 jours (effet saison retiré) | 0,66 [0,61–0,70] | 0,65 [0,60–0,69] |
+| Identifications « recherche » seules (n = 30) | 0,92 | 0,91 |
+| Maille observée vs mailles forestières (n = 34) | 0,70 [0,64–0,77] | 0,68 [0,61–0,75] |
+| Référence « couverture forestière seule » | 0,56 [0,49–0,63] | |
+| Automnes humides / secs (V1.1) | | 0,89 (n = 25) / 0,89 (n = 16) |
+
+Lecture :
+- le score météo classe mieux les dates d'observation que la saison seule, y compris à ± 30 jours :
+  la dynamique pluie/température apporte une information réelle, modeste ;
+- **V1 et V1.1 ne sont pas distinguables** sur ces données (écarts dans les intervalles) ; la V1.1
+  n'apporte pas de gain mesurable de classement, elle supprime des zéros artificiels et
+  rend l'incertitude visible ;
+- l'habitat classe mieux les lieux observés que la simple couverture forestière ;
+- la sensibilité aux paramètres d'humidité (RU 22-55 mm, kc 0,5-0,8, seuils, modèle seul / bilan
+  seul) est nulle sur l'AUC temporelle : ces observations ne permettent pas de les départager ;
+- par espèce, seuls les effectifs « tous cèpes » dépassent 30 : les résultats par espèce sont non
+  concluants ; le cèpe des pins n'a qu'une observation ;
+- biais : 28 % d'observations le week-end (attendu 29 %) ; distance médiane à Bordeaux 48 km contre
+  65 km pour l'ensemble des forêts (biais vers les zones proches).

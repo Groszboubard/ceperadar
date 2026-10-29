@@ -28,8 +28,8 @@ Un 80+ exige H et W ≥ ~90.
 | Lisières | BD Forêt® V2 (rastérisée à ~50 m) | jusqu'à + 10 % |
 | Mélange d'essences | indice de Simpson pins / chênes / hêtre-châtaignier / autres | jusqu'à + 8 % |
 | Actualisation | ESA WorldCover 2021 + Hansen GFC | coupes ≤ 6 ans → coupe ; coupes 2009-2020 et « FF0 » reboisés → jeune peuplement ; bois hors BD Forêt → essence inconnue |
-| pH indicatif | géologie BRGM 1/50 000 | × 0,85 à 1 hors plage ; neutre si inconnu (SoilGrids abandonné : erroné sur les sables) |
-| Engorgement | géologie BRGM (tourbes, alluvions) | jusqu'à − 15 % |
+| pH indicatif | géologie BRGM 1/50 000 si accessible | × 0,85 à 1 hors plage ; **neutre aujourd'hui** (SoilGrids abandonné : erroné sur les sables) |
+| Engorgement | géologie BRGM (tourbes, alluvions) si accessible | jusqu'à − 15 % ; inactif aujourd'hui |
 | Relief | Copernicus DEM | ± 4 % maximum (relief modeste autour de Bordeaux) |
 
 ### Affinités espèce × essence (0–1)
@@ -67,9 +67,10 @@ Pour une date cible D, seules les données **jusqu'à la veille** sont utilisée
   survenu 8–16 j (5–12 j pour les espèces estivales) avant D.
   → Une grosse pluie **la veille** ne compte presque pas pour le lendemain (testé).
 - **M — humidité du sol (V1.1, modèle C hybride)**, calculée par unité point météo × lithologie :
-  - A' : réservoir de la couche 0–30 cm, capacité RU selon la géologie (sables landais 22 mm,
-    dunes 18, graves 30, limons/molasses 55, calcaires 45, alluvions 70, tourbes 90 ; 35 si
-    inconnue) ; interception canopée 1 mm + 12 % ; pertes 0,65 × ETP réduites linéairement sous
+  - A' : réservoir de la couche 0–30 cm, capacité RU selon la géologie BRGM quand elle est
+    accessible (sables landais 22 mm, dunes 18, graves 30, limons/molasses 55, calcaires 45,
+    alluvions 70, tourbes 90) ; **aujourd'hui 35 mm partout** faute de source de sol exploitable
+    (voir AUDIT_V1.1.md § 4 bis) ; interception canopée 1 mm + 12 % ; pertes 0,65 × ETP réduites linéairement sous
     40 % de réserve (Granier et al. 1999, modèle BILJOU) ; initialisé par l'humidité modélisée ;
   - B : humidité volumique Open-Meteo 3–9 et 9–27 cm, normalisée par son enveloppe régionale
     (centiles 5–95) — les m³/m³ ne sont jamais convertis directement en mm ;

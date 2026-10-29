@@ -164,8 +164,15 @@ jobs:
           git reset -q
       - name: Validation historique (GBIF + iNaturalist, ERA5)
         run: python -m pipeline.backtest
-      - name: Enregistrer les résultats
+      - name: Enregistrer les résultats (sur la version la plus récente de la branche data)
         run: |
+          OUT=$(mktemp -d)
+          cp "$CEPERADAR_DATA"/static/backtest.json "$CEPERADAR_DATA"/static/normals.json "$CEPERADAR_DATA"/static/observations.json "$OUT"/ 2>/dev/null || true
+          rm -rf "$CEPERADAR_DATA" && mkdir -p "$CEPERADAR_DATA"
+          git fetch --depth 1 origin data
+          git --work-tree="$CEPERADAR_DATA" checkout origin/data -- .
+          git reset -q
+          cp "$OUT"/*.json "$CEPERADAR_DATA"/static/
           cd "$CEPERADAR_DATA"
           rm -rf .git
           git init -q -b data

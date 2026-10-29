@@ -583,7 +583,7 @@ def fetch_brgm_litho(grid, sub, departements=("33", "40", "47", "24", "17", "16"
     out_shape = (grid.size * sub, grid.size * sub)
     transform = from_origin(w, n, grid.dlon / sub, grid.dlat / sub)
     shapes = []
-    stats = {"ok": [], "failed": [], "texts": {}}
+    stats = {"ok": [], "failed": [], "texts": {}, "errors": []}
     from shapely.geometry import box
     roi = box(w, s, e, n)
     for d in departements:
@@ -591,13 +591,16 @@ def fetch_brgm_litho(grid, sub, departements=("33", "40", "47", "24", "17", "16"
         for url in (f"https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_{d}.zip",
                     f"http://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_{d}.zip"):
             try:
-                r = requests.get(url, timeout=600, headers={"User-Agent": "CepeRadar/1.1"})
+                r = requests.get(url, timeout=900, headers={"User-Agent": "Mozilla/5.0 (CepeRadar/1.1; usage personnel)"}, allow_redirects=True)
                 if r.status_code == 200 and r.content[:2] == b"PK":
                     content = r.content
                     break
-                log.warning("BRGM %s : HTTP %s", url, r.status_code)
+                msg = f"{url} : HTTP {r.status_code}, {len(r.content)} octets, type {r.headers.get('content-type')}, début {r.content[:80]!r}"
+                log.warning("BRGM %s", msg)
+                stats["errors"].append(msg[:300])
             except Exception as ex:
                 log.warning("BRGM %s : %s", url, ex)
+                stats["errors"].append(f"{url} : {str(ex)[:200]}")
         if content is None:
             stats["failed"].append(d)
             continue
@@ -646,12 +649,82 @@ def fetch_brgm_litho(grid, sub, departements=("33", "40", "47", "24", "17", "16"
                     cnt += 1
             stats["ok"].append(d)
             log.info("BRGM %s : %d polygones utiles (champs %s)", d, cnt, fields[:12])
+    if not shapes:
+        # Repli : service WFS géologie du BRGM (découverte des couches)
+        try:
+            shapes += _brgm_wfs_shapes(grid, stats)
+        except Exception as ex:
+            stats["errors"].append(f"WFS BRGM : {str(ex)[:300]}")
     for key in stats["texts"]:
         stats["texts"][key] = sorted(stats["texts"][key].items(), key=lambda x: -x[1])[:12]
     if not shapes:
         return None, stats
     r = rasterize(shapes, out_shape=out_shape, transform=transform, fill=0, dtype="uint8")
     return r, stats
+
+
+def _brgm_wfs_shapes(grid, stats):
+    """Interroge le WFS géologie du BRGM ; garde la première couche de formations géologiques."""
+    import requests
+    import xml.etree.ElementTree as ET
+    from shapely.geometry import shape as shp_shape
+
+    sess = requests.Session()
+    found = []
+    base_used = None
+    for base in ("https://geoservices.brgm.fr/geologie", "http://geoservices.brgm.fr/geologie"):
+        try:
+            r = sess.get(base, params={"SERVICE": "WFS", "REQUEST": "GetCapabilities"}, timeout=120)
+            root = ET.fromstring(r.content)
+            for el in root.iter():
+                if el.tag.endswith("FeatureType"):
+                    for ch in el:
+                        if ch.tag.endswith("Name") and ch.text:
+                            found.append(ch.text.strip())
+            base_used = base
+            break
+        except Exception as ex:
+            stats["errors"].append(f"WFS {base} : {str(ex)[:200]}")
+    stats["wfs_typenames"] = found[:200]
+    cands = [x for x in found if re.search(r"FGEOL|S_FGEOL|formation|GEO050K|lithol|geol", x, re.I) and not re.search(r"L_|_L$|point|ligne|contour", x, re.I)]
+    stats["wfs_candidates"] = cands[:40]
+    if not cands or not base_used:
+        return []
+    tn = sorted(cands, key=lambda x: (0 if re.search(r"FGEOL|formation", x, re.I) else 1, len(x)))[0]
+    shapes = []
+    w, s, e, n = grid.bounds
+    for tb in tiles(grid.bounds, 0.25):
+        params = {"SERVICE": "WFS", "VERSION": "2.0.0", "REQUEST": "GetFeature", "TYPENAMES": tn, "OUTPUTFORMAT": "geojson",
+                  "SRSNAME": "EPSG:4326", "BBOX": f"{tb[1]},{tb[0]},{tb[3]},{tb[2]},urn:ogc:def:crs:EPSG::4326", "COUNT": "5000"}
+        r = sess.get(base_used, params=params, timeout=300)
+        try:
+            data = r.json()
+        except Exception:
+            params["OUTPUTFORMAT"] = "application/json"
+            r = sess.get(base_used, params=params, timeout=300)
+            try:
+                data = r.json()
+            except Exception:
+                stats["errors"].append(f"WFS {tn} : réponse non JSON {r.text[:200]}")
+                return shapes
+        for f in data.get("features", []):
+            if not f.get("geometry"):
+                continue
+            g = shp_shape(f["geometry"])
+            text = " ".join(str(v) for v in (f.get("properties") or {}).values() if isinstance(v, str))
+            c = classify_litho(text)
+            key = LITHO_KEYS[c]
+            stats["texts"].setdefault(key, {})
+            stats["texts"][key][text[:90]] = stats["texts"][key].get(text[:90], 0) + 1
+            if c > 0:
+                c0 = g.representative_point()
+                if not (w - 1 <= c0.x <= e + 1):  # axes inversés
+                    from shapely.ops import transform
+                    g = transform(lambda x, y, z=None: (y, x), g)
+                shapes.append((g, c))
+    stats["wfs_layer"] = tn
+    log.info("WFS BRGM %s : %d polygones utiles", tn, len(shapes))
+    return shapes
 
 
 def saxton_rawls_ru(sand_pct, clay_pct, soc_gkg, depth_mm=300):

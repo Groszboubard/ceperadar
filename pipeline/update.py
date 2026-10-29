@@ -74,9 +74,9 @@ def quality_control(series, lats, lons, run_idx):
     suspect = np.where(np.abs(r30 - neigh) > 5 * mad)[0]
     rep["spatial_outliers"] = [{"lat": round(float(lats[k]), 3), "lon": round(float(lons[k]), 3), "rain30": round(float(r30[k]), 1),
                                 "neighbours": round(float(neigh[k]), 1)} for k in suspect[:20]]
-    # rupture temporelle : tous les points à 0 mm un jour où le reste de la série est pluvieux
-    zero_days = [int(t) for t in range(lo, run_idx) if np.nanmax(series["precip"][:, t]) == 0 and np.nanmean(series["precip"][:, lo:run_idx]) > 1]
-    rep["all_zero_days"] = len(zero_days)
+    # séries figées : un point dont la pluie est constante sur 40 jours trahit un défaut de source
+    flat = [int(k) for k in range(n) if np.nanstd(series["precip"][k, lo:run_idx]) == 0 and np.nanmean(series["precip"][k, lo:run_idx]) > 0]
+    rep["flat_series_points"] = len(flat)
     return rep, absent, suspect
 
 

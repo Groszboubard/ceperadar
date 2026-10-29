@@ -125,6 +125,8 @@ def main(argv=None):
     try:
         litho_r, litho_stats = sources.fetch_brgm_litho(grid, sub)
         meta["sources"]["brgm"] = {"ok": litho_stats["ok"], "failed": litho_stats["failed"], "examples": litho_stats["texts"],
+                                   "errors": litho_stats.get("errors", [])[:12], "wfs_layer": litho_stats.get("wfs_layer"),
+                                   "wfs_candidates": litho_stats.get("wfs_candidates"), "wfs_typenames": litho_stats.get("wfs_typenames", [])[:60],
                                    "name": "BRGM — cartes géologiques harmonisées 1/50 000 (BD Charm-50)"}
     except Exception as ex:
         log.warning("BRGM indisponible : %s", ex)
@@ -175,8 +177,8 @@ def main(argv=None):
     prot_layers = [
         ([r"PROTECTEDAREAS\.RN:", r"PROTECTEDAREAS\.RN\b", r"(^|[:._])rnn([:._]|$)", r"reserves?_naturelles?_nationales?"], "Réserve naturelle nationale"),
         ([r"PROTECTEDAREAS\.RNR", r"(^|[:._])rnr([:._]|$)", r"reserves?_naturelles?_regionales?"], "Réserve naturelle régionale"),
-        ([r"PROTECTEDAREAS\.APB", r"PROTECTEDAREAS\.APPB", r"(^|[:._])appb?([:._]|$)", r"biotope"], "Arrêté de protection de biotope"),
-        ([r"PROTECTEDAREAS\.RB:", r"PROTECTEDAREAS\.RB\b", r"reserves?_biologiques?"], "Réserve biologique"),
+        ([r"PROTECTEDAREAS\.APB", r"patrinat_apb:", r"(^|[:._])(apb|appb)([:._]|$)", r"biotope"], "Arrêté de protection de biotope"),
+        ([r"PROTECTEDAREAS\.RB:", r"patrinat_rb:", r"(^|[:._])rb([:._]|$)", r"reserves?_biologiques?"], "Réserve biologique"),
     ]
     prot_frac = np.zeros((grid.size, grid.size), dtype=np.float32)
     prot_name = np.full((grid.size, grid.size), -1, dtype=int)

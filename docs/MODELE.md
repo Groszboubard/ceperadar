@@ -1,4 +1,8 @@
-# Modèle de favorabilité CèpeRadar
+# Modèle de favorabilité CèpeRadar (V1.1)
+
+> V1.1 : humidité du sol hybride, forêt actualisée par satellite, géologie BRGM, états
+> « incertain » et « données absentes ». Détail de l'audit et des chiffres avant/après :
+> [AUDIT_V1.1.md](AUDIT_V1.1.md). Paramètres V1 conservés dans `model/params_v1.json`.
 
 > L'indice (0–100) est un **indice environnemental**, pas une probabilité de trouver des cèpes.
 > Il n'est pas encore calibré sur des récoltes réelles. Les paramètres sont des a priori
@@ -23,7 +27,9 @@ Un 80+ exige H et W ≥ ~90.
 | Couverture forestière | BD Forêt® V2 | × 0,35 (5 % boisé) → × 1 (≥ 60 % boisé) ; < 5 % : maille exclue |
 | Lisières | BD Forêt® V2 (rastérisée à ~50 m) | jusqu'à + 10 % |
 | Mélange d'essences | indice de Simpson pins / chênes / hêtre-châtaignier / autres | jusqu'à + 8 % |
-| pH du sol | SoilGrids 250 m (modélisé) | × 0,85 à 1 hors plage ; neutre si inconnu |
+| Actualisation | ESA WorldCover 2021 + Hansen GFC | coupes ≤ 6 ans → coupe ; coupes 2009-2020 et « FF0 » reboisés → jeune peuplement ; bois hors BD Forêt → essence inconnue |
+| pH indicatif | géologie BRGM 1/50 000 | × 0,85 à 1 hors plage ; neutre si inconnu (SoilGrids abandonné : erroné sur les sables) |
+| Engorgement | géologie BRGM (tourbes, alluvions) | jusqu'à − 15 % |
 | Relief | Copernicus DEM | ± 4 % maximum (relief modeste autour de Bordeaux) |
 
 ### Affinités espèce × essence (0–1)
@@ -60,9 +66,16 @@ Pour une date cible D, seules les données **jusqu'à la veille** sont utilisée
   6 à 21 jours (espèces estivales plus rapides). Déclencheur = épisode ≥ 30 mm en 3 jours
   survenu 8–16 j (5–12 j pour les espèces estivales) avant D.
   → Une grosse pluie **la veille** ne compte presque pas pour le lendemain (testé).
-- **M — humidité du sol** : réservoir de 50 mm (sable des Landes), + pluie − 0,8 × ETP
-  FAO (Open-Meteo), lissé sur 5 jours ; 0 sous 12 %, 1 au-delà de 65 %. Un jour sans
-  donnée n'est jamais comblé : le score devient « inconnu ».
+- **M — humidité du sol (V1.1, modèle C hybride)**, calculée par unité point météo × lithologie :
+  - A' : réservoir de la couche 0–30 cm, capacité RU selon la géologie (sables landais 22 mm,
+    dunes 18, graves 30, limons/molasses 55, calcaires 45, alluvions 70, tourbes 90 ; 35 si
+    inconnue) ; interception canopée 1 mm + 12 % ; pertes 0,65 × ETP réduites linéairement sous
+    40 % de réserve (Granier et al. 1999, modèle BILJOU) ; initialisé par l'humidité modélisée ;
+  - B : humidité volumique Open-Meteo 3–9 et 9–27 cm, normalisée par son enveloppe régionale
+    (centiles 5–95) — les m³/m³ ne sont jamais convertis directement en mm ;
+  - C = 0,6 A' + 0,4 B ; |A' − B| > 0,35 ⇒ confiance × 0,65 (hachures « incertain ») ;
+  - M = lissage de C entre 5 % et 50 % (V1 : réservoir 50 mm, 12 % → 65 %, qui annulait le score
+    sur un tiers des points). Un jour sans donnée n'est jamais comblé.
 - **T — température** : trapèzes par espèce sur la moyenne de l'air à 20 jours (poids 0,5),
   7 jours (0,25) et du sol à 6 cm sur 7 jours (0,25). Plages optimales (20 j) : edulis
   10,5–16,5 °C, pinophilus 9–15 °C, aereus 15–22 °C, reticulatus 16–23 °C.
@@ -90,16 +103,25 @@ W = R^0,45 × M^0,30 × T^0,25 × (0,15 + 0,85 S) × gel × chaleur × (1 + bonu
 - Écologie des espèces (hôtes, sols acides, thermophilie d'*aereus*, saison estivale de
   *reticulatus*) : flores mycologiques et synthèses usuelles.
 
-## 4. Confiance
+## 4. États affichés
+
+- **Score calculé** : couleur de l'échelle.
+- **Incertain** (confiance < 50) : couleur + hachures. Causes : sources d'humidité en désaccord,
+  échéance lointaine, point météo atypique, essence non cartographiée.
+- **Données absentes** : gris. Jamais assimilé à un score défavorable.
+
+## 5. Confiance
 
 `confiance = min(confiance statique de la maille, confiance météo de la date)`
 
-- statique : 85, − 10 sans pH, − 5 sans relief, − 10 si la maille est boisée à < 15 % ;
+- statique : 85, − 10 sans géologie, − 5 sans relief, − 10 si la maille est boisée à < 15 %,
+  − 20 × part d'essence non cartographiée, − 5 si l'actualisation satellite a échoué ;
+- humidité : × 0,65 si les deux sources divergent, × 0,85 si une seule est disponible ;
 - météo : 1 − 0,6 × (part des entrées issues de prévisions) − 0,05 × (échéance − 1),
   plafonnée à 0,95 (résolution ~9 km : jamais « certain » à l'échelle d'un arbre).
 - Élevée ≥ 75, Moyenne ≥ 50, Faible sinon. Point météo incomplet → score inconnu.
 
-## 5. Validation (pipeline/backtest.py)
+## 6. Validation (pipeline/backtest.py)
 
 Observations GBIF datées depuis 2015 (incertitude ≤ 5 km) ; météo ERA5 aux points qui en
 concentrent le plus ; même moteur que la production. Métriques AUC (0,5 = hasard) :
@@ -108,7 +130,7 @@ modèle « saison seule » ; maille observée vs mailles forestières, comparée
 seule ». Résultats affichés dans l'onglet Infos. Biais : observations opportunistes
 (lieux accessibles, week-ends), absence ≠ absence de cèpes.
 
-## 6. Recalibrer
+## 7. Recalibrer
 
 1. Noter chaque sortie dans le Journal (y compris les sorties sans cèpe).
 2. Exporter le journal (JSON/CSV).

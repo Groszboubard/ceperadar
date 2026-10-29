@@ -857,6 +857,46 @@ def fetch_inrae_ru(grid, sub):
         if g.intersects(roi):
             shapes.append((g, int(np.clip(round(val), 1, 255))))
     stats["classes"] = examples
+    if not shapes and "CLASSE" in names:
+        # Codes de classe ordinaux sans libellé (1 à 5 ; 9 = hors sol). Légende officielle non publiée :
+        # hypothèse documentée = classes usuelles des cartes de RU (< 50, 50-100, 100-150, 150-200, > 200 mm),
+        # sens vérifié par la géographie (les sables landais doivent avoir la plus faible réserve, INRAE).
+        ci = names.index("CLASSE")
+        coded = []
+        for k, wkb in enumerate(geoms):
+            try:
+                code = int(float(fields[ci][k]))
+            except (TypeError, ValueError):
+                continue
+            if wkb is None or not 1 <= code <= 5:
+                continue
+            g = shapely.from_wkb(wkb)
+            g = shapely.transform(g, lambda xy: np.column_stack(tr.transform(xy[:, 0], xy[:, 1])))
+            if g.intersects(roi):
+                coded.append((g, code))
+        if coded:
+            codes_r = rasterize(coded, out_shape=(grid.size * sub, grid.size * sub),
+                                transform=from_origin(w, n, grid.dlon / sub, grid.dlat / sub), fill=0, dtype="uint8")
+            def box_median(la0, la1, lo0, lo1):
+                r0 = int((n - la1) / (grid.dlat / sub)); r1 = int((n - la0) / (grid.dlat / sub))
+                c0 = int((lo0 - w) / (grid.dlon / sub)); c1 = int((lo1 - w) / (grid.dlon / sub))
+                v = codes_r[r0:r1, c0:c1]
+                v = v[v > 0]
+                return float(np.median(v)) if len(v) else np.nan
+            landes = box_median(44.45, 44.70, -0.90, -0.60)
+            other = box_median(44.70, 44.85, -0.35, 0.00)  # Entre-deux-Mers (calcaires, molasses)
+            ascending = not (np.isfinite(landes) and np.isfinite(other) and landes > other)
+            mids = [37.5, 75, 125, 175, 230] if ascending else [230, 175, 125, 75, 37.5]
+            lut = np.zeros(256, dtype=np.uint8)
+            for c in range(1, 6):
+                lut[c] = int(round(mids[c - 1]))
+            stats["assumption"] = {"codes": "1-5 ordinal, 9 = hors sol", "classes_mm": "<50, 50-100, 100-150, 150-200, >200",
+                                   "order": "croissant" if ascending else "décroissant",
+                                   "median_code_landes": landes, "median_code_entre_deux_mers": other,
+                                   "note": "légende officielle non publiée : correspondance supposée, sens vérifié par la géographie"}
+            stats["n_polygons"] = len(coded)
+            log.info("INRAE BDGSF : codes ordinaux, sens %s (Landes %.1f / Entre-deux-Mers %.1f)", stats["assumption"]["order"], landes, other)
+            return lut[codes_r], stats
     stats["n_polygons"] = len(shapes)
     log.info("INRAE BDGSF réserve utile : %d polygones, classes %s", len(shapes), examples)
     if not shapes:

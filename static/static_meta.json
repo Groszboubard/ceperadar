@@ -1,0 +1,336 @@
+{
+ "generated_at": "2026-10-29T16:11:31+00:00",
+ "sources": {
+  "forest_update": {
+   "worldcover": true,
+   "hansen": "GFC-2024-v1.12",
+   "pixel_ha": 0.249,
+   "changes_ha": {
+    "14->17": 248086,
+    "0->18": 242763,
+    "foret->14 (coupe récente)": 71242,
+    "foret->17 (coupe 2009-2020)": 167767
+   },
+   "note": "WorldCover 2021 (ESA, CC BY 4.0) ; Hansen/UMD Global Forest Change (CC BY 4.0)."
+  },
+  "brgm": {
+   "ok": [],
+   "failed": [
+    "33",
+    "40",
+    "47",
+    "24",
+    "17",
+    "16"
+   ],
+   "examples": {},
+   "errors": [
+    "https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_033.zip : HTTP 404, 236 octets, type text/html; charset=iso-8859-1, début b'<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/st'",
+    "https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_040.zip : HTTP 404, 236 octets, type text/html; charset=iso-8859-1, début b'<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/st'",
+    "https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_047.zip : HTTP 404, 236 octets, type text/html; charset=iso-8859-1, début b'<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/st'",
+    "https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_024.zip : HTTP 404, 236 octets, type text/html; charset=iso-8859-1, début b'<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/st'",
+    "https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_017.zip : HTTP 404, 236 octets, type text/html; charset=iso-8859-1, début b'<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/st'",
+    "https://infoterre.brgm.fr/telechargements/BDCharm50/GEO050K_HARM_016.zip : HTTP 404, 236 octets, type text/html; charset=iso-8859-1, début b'<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/st'",
+    "WFS BRGM : mismatched tag: line 1, column 234"
+   ],
+   "wfs_layer": null,
+   "wfs_candidates": null,
+   "wfs_typenames": [],
+   "name": "BRGM — cartes géologiques harmonisées 1/50 000 (BD Charm-50)"
+  },
+  "inrae_ru": {
+   "error": "source désactivée (légende des classes non publiée, voir model/params.json)"
+  },
+  "bdforet": {
+   "name": "IGN BD Forêt® V2",
+   "layer": "LANDCOVER.FORESTINVENTORY.V2:formation_vegetale",
+   "licence": "Licence Ouverte Etalab 2.0",
+   "url": "https://geoservices.ign.fr/bdforet",
+   "polygons": 153570,
+   "fields": [
+    "code_tfv",
+    "essence",
+    "id",
+    "tfv",
+    "tfv_g11"
+   ],
+   "tfv_top": [
+    [
+     "FF1-00-00 | Forêt fermée à mélange de feuillus | Feuillus",
+     24189
+    ],
+    [
+     "FF0 | Forêt fermée sans couvert arboré | NR",
+     23246
+    ],
+    [
+     "FF1-00 | Forêt fermée de feuillus purs en îlots | Feuillus",
+     22315
+    ],
+    [
+     "FF1G01-01 | Forêt fermée de chênes décidus purs | Chênes décidus",
+     15498
+    ],
+    [
+     "FF2-51-51 | Forêt fermée de pin maritime pur | Pin maritime",
+     14391
+    ],
+    [
+     "FF31 | Forêt fermée à mélange de feuillus prépondérants et conifères | Mixte",
+     13174
+    ],
+    [
+     "LA4 | Lande | NC",
+     10778
+    ],
+    [
+     "FF32 | Forêt fermée à mélange de conifères prépondérants et feuillus | Mixte",
+     8619
+    ],
+    [
+     "FP | Peupleraie | Peuplier",
+     6625
+    ],
+    [
+     "FO1 | Forêt ouverte de feuillus purs | Feuillus",
+     3907
+    ],
+    [
+     "FF1-10-10 | Forêt fermée de châtaignier pur | Châtaignier",
+     2474
+    ],
+    [
+     "FF1-14-14 | Forêt fermée de robinier pur | Robinier",
+     1641
+    ],
+    [
+     "FO3 | Forêt ouverte à mélange de feuillus et conifères | Mixte",
+     1451
+    ],
+    [
+     "FO2 | Forêt ouverte de conifères purs | Conifères",
+     1081
+    ],
+    [
+     "FF2G53-53 | Forêt fermée de pin laricio ou pin noir pur | Pin laricio, pin noir",
+     852
+    ],
+    [
+     "FF2-00 | Forêt fermée de conifères purs en îlots | Conifères",
+     696
+    ],
+    [
+     "FF1-49-49 | Forêt fermée dun autre feuillu pur | Feuillus",
+     677
+    ],
+    [
+     "FF1-49-49 | Forêt fermée d’un autre feuillu pur | Feuillus",
+     669
+    ],
+    [
+     "FF2-80-80 | Forêt fermée à mélange de pins purs | Pins mélangés",
+     281
+    ],
+    [
+     "FF2-52-52 | Forêt fermée de pin sylvestre pur | Pin sylvestre",
+     234
+    ],
+    [
+     "LA6 | Formation herbacée | NC",
+     192
+    ],
+    [
+     "FF2-81-81 | Forêt fermée d’un autre pin pur | Pin autre",
+     162
+    ],
+    [
+     "FF2-81-81 | Forêt fermée dun autre pin pur | Pin autre",
+     135
+    ],
+    [
+     "FF2-00-00 | Forêt fermée à mélange de conifères | Conifères",
+     76
+    ],
+    [
+     "FF2-64-64 | Forêt fermée de douglas pur | Douglas",
+     62
+    ],
+    [
+     "FO0 | Forêt ouverte sans couvert arboré | NR",
+     46
+    ],
+    [
+     "FF1G06-06 | Forêt fermée de chênes sempervirents purs | Chênes sempervirents",
+     29
+    ],
+    [
+     "FF2-91-91 | Forêt fermée d’un autre conifère pur autre que pin  | Conifères",
+     26
+    ],
+    [
+     "FF2G61-61 | Forêt fermée de sapin ou épicéa | Sapin, épicéa",
+     24
+    ],
+    [
+     "FF2-91-91 | Forêt fermée dun autre conifère pur autre que pin  | Conifères",
+     14
+    ],
+    [
+     "FF2-90-90 | Forêt fermée à mélange dautres conifères | Conifères",
+     3
+    ],
+    [
+     "FF1-09-09 | Forêt fermée de hêtre pur | Hêtre",
+     2
+    ],
+    [
+     "FF2-90-90 | Forêt fermée à mélange d’autres conifères | Conifères",
+     1
+    ]
+   ],
+   "class_counts": {
+    "0": 192,
+    "1": 14391,
+    "2": 1728,
+    "3": 838,
+    "4": 15498,
+    "5": 29,
+    "6": 2,
+    "7": 2474,
+    "8": 47850,
+    "9": 13174,
+    "10": 8619,
+    "11": 6625,
+    "12": 1641,
+    "13": 5358,
+    "14": 23292,
+    "15": 10778,
+    "16": 1081
+   },
+   "note": "Millésimes départementaux variables (prises de vue souvent > 10 ans) ; polygones ≥ 0,5 ha."
+  },
+  "protected": [
+   {
+    "type": "Réserve naturelle nationale",
+    "layer": "patrinat_rnn:rnn",
+    "n": 11
+   },
+   {
+    "type": "Réserve naturelle régionale",
+    "layer": "patrinat_rnr:rnr",
+    "n": 1
+   },
+   {
+    "type": "Arrêté de protection de biotope",
+    "layer": "patrinat_apb:apb",
+    "n": 27
+   },
+   {
+    "type": "Réserve biologique",
+    "layer": "patrinat_rb:rb",
+    "n": 4
+   }
+  ],
+  "public_forests": {
+   "layer": "BDTOPO_V3:foret_publique",
+   "n": 199,
+   "name": "Forêts publiques (ONF) — Géoplateforme"
+  },
+  "soilgrids": {
+   "name": "SoilGrids 2.0 (ISRIC)",
+   "licence": "CC BY 4.0",
+   "resolution": "250 m (modélisé)",
+   "valid_ph": 0.9639843150626545
+  },
+  "dem": {
+   "name": "Copernicus DEM GLO-30",
+   "licence": "Licence Copernicus DEM (libre, attribution)",
+   "ok": true
+  },
+  "gbif": {
+   "n": 43,
+   "url": "https://www.gbif.org"
+  }
+ },
+ "wfs_protected_candidates": [
+  "BDCARTO_V5:parc_ou_reserve",
+  "BDCARTO_V5:reservoir",
+  "BDTOPO_V3_DIFF:reservoir",
+  "BDTOPO_V3:parc_ou_reserve",
+  "BDTOPO_V3:reservoir",
+  "patrinat_aphn:aphn",
+  "patrinat_apb:apb",
+  "patrinat_apg:apg",
+  "patrinat_aplg:aplg",
+  "patrinat_bpm:Bien_patrimoine_mondial_UNESCO",
+  "patrinat_cdl:conservatoire_littoral",
+  "patrinat_geoparc:geoparc",
+  "patrinat_gsf:gsf",
+  "patrinat_inpg:inpg",
+  "patrinat_ospar:pgsf",
+  "patrinat_pgsf:pgsf",
+  "patrinat_pn:parc_national",
+  "patrinat_pn2:pn",
+  "patrinat_pnm:pnm",
+  "patrinat_pprnn:pprnn",
+  "patrinat_pnr:pnr",
+  "patrinat_pprnr:pprnr",
+  "patrinat_ripn:ripn",
+  "patrinat_rnc:pnm",
+  "patrinat_rncfs:rncfs",
+  "patrinat_rnn:rnn",
+  "patrinat_rb:rb",
+  "patrinat_bios:bios",
+  "patrinat_rnr:rnr",
+  "patrinat_sc:sc",
+  "patrinat_sic:sic",
+  "patrinat_ramsar:ramsar",
+  "patrinat_cen:cen",
+  "patrinat_znieff1:znieff1",
+  "patrinat_znieff1_mer:znieff1_mer",
+  "patrinat_znieff2:znieff2",
+  "patrinat_znieff2_mer:znieff2_mer",
+  "patrinat_zpr:zpr",
+  "patrinat_zps:zps",
+  "PROTECTEDAREAS.PRSF:prsf"
+ ],
+ "ru_source_share": {
+  "brgm": 0.0,
+  "inrae": 0.0,
+  "defaut": 1.0
+ },
+ "lithology_share": {
+  "inconnue": 1.0,
+  "sable_landes": 0.0,
+  "dune": 0.0,
+  "graves": 0.0,
+  "sable": 0.0,
+  "limon": 0.0,
+  "argile_alluvions": 0.0,
+  "calcaire": 0.0,
+  "tourbe": 0.0
+ },
+ "summary": {
+  "cells": 23462,
+  "weather_points": 653,
+  "habitat_p50": {
+   "edulis": 49.0,
+   "pinophilus": 36.0,
+   "aereus": 32.0,
+   "reticulatus": 31.0
+  },
+  "habitat_p90": {
+   "edulis": 72.0,
+   "pinophilus": 64.0,
+   "aereus": 64.0,
+   "reticulatus": 64.0
+  },
+  "habitat_v1_p50": {
+   "edulis": 42.0,
+   "pinophilus": 24.0,
+   "aereus": 29.0,
+   "reticulatus": 28.0
+  },
+  "units": 653
+ }
+}

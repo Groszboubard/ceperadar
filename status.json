@@ -1,0 +1,139 @@
+{
+ "started_at": "2026-10-30T22:40:31+01:00",
+ "kind": "evening",
+ "model_version": "1.1.0",
+ "steps": [
+  {
+   "step": "open-meteo",
+   "ok": true,
+   "past_days": 4,
+   "requests": 5,
+   "weight": 848.9,
+   "variables": {
+    "daily": [
+     "precipitation_sum",
+     "temperature_2m_mean",
+     "temperature_2m_max",
+     "temperature_2m_min",
+     "et0_fao_evapotranspiration",
+     "sunshine_duration",
+     "shortwave_radiation_sum",
+     "relative_humidity_2m_mean",
+     "dew_point_2m_mean",
+     "precipitation_hours"
+    ],
+    "hourly": [
+     "soil_temperature_6cm",
+     "soil_moisture_3_to_9cm",
+     "soil_moisture_9_to_27cm"
+    ]
+   }
+  },
+  {
+   "step": "scores",
+   "ok": true,
+   "points": 653,
+   "units": 653,
+   "absent_points": 0,
+   "suspect_points": 6,
+   "dates": [
+    "2026-10-23",
+    "2026-10-24",
+    "2026-10-25",
+    "2026-10-26",
+    "2026-10-27",
+    "2026-10-28",
+    "2026-10-29",
+    "2026-10-30",
+    "2026-10-31",
+    "2026-11-01",
+    "2026-11-02",
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05",
+    "2026-11-06"
+   ]
+  }
+ ],
+ "warnings": [
+  "6 points météo à cumul de pluie atypique par rapport aux voisins (confiance réduite)"
+ ],
+ "ok": true,
+ "qc": {
+  "missing_rate": {
+   "precip": 0.0,
+   "tmean": 0.0,
+   "tmax": 0.0,
+   "tmin": 0.0,
+   "et0": 0.0,
+   "tsoil": 0.0,
+   "sm": 0.0,
+   "sm2": 0.0,
+   "rh": 0.0
+  },
+  "out_of_range": {
+   "precip": 0,
+   "tmean": 0,
+   "tmax": 0,
+   "tmin": 0,
+   "et0": 0,
+   "tsoil": 0,
+   "sm": 0,
+   "sm2": 0,
+   "rh": 0
+  },
+  "spatial_outliers": [
+   {
+    "lat": 43.938,
+    "lon": -0.499,
+    "rain30": 16.3,
+    "neighbours": 78.2
+   },
+   {
+    "lat": 44.418,
+    "lon": 0.301,
+    "rain30": 111.4,
+    "neighbours": 59.6
+   },
+   {
+    "lat": 44.718,
+    "lon": -0.659,
+    "rain30": 55.0,
+    "neighbours": 16.6
+   },
+   {
+    "lat": 44.838,
+    "lon": -0.659,
+    "rain30": 67.7,
+    "neighbours": 14.1
+   },
+   {
+    "lat": 45.018,
+    "lon": -0.739,
+    "rain30": 59.6,
+    "neighbours": 12.8
+   },
+   {
+    "lat": 45.138,
+    "lon": -0.739,
+    "rain30": 58.8,
+    "neighbours": 9.4
+   }
+  ],
+  "flat_series_points": 0,
+  "first_valid_day": "2026-07-29",
+  "history_days": 93,
+  "model_moisture_envelopes": [
+   [
+    0.043,
+    0.28
+   ],
+   [
+    0.048,
+    0.261
+   ]
+  ]
+ },
+ "finished_at": "2026-10-30T22:42:22+01:00",
+ "duration_s": 111.2
+}

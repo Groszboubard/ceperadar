@@ -1,0 +1,127 @@
+{
+ "started_at": "2026-11-03T10:28:13+01:00",
+ "kind": "manual",
+ "model_version": "1.1.0",
+ "steps": [
+  {
+   "step": "open-meteo",
+   "ok": true,
+   "past_days": 5,
+   "requests": 5,
+   "weight": 848.9,
+   "variables": {
+    "daily": [
+     "precipitation_sum",
+     "temperature_2m_mean",
+     "temperature_2m_max",
+     "temperature_2m_min",
+     "et0_fao_evapotranspiration",
+     "sunshine_duration",
+     "shortwave_radiation_sum",
+     "relative_humidity_2m_mean",
+     "dew_point_2m_mean",
+     "precipitation_hours"
+    ],
+    "hourly": [
+     "soil_temperature_6cm",
+     "soil_moisture_3_to_9cm",
+     "soil_moisture_9_to_27cm"
+    ]
+   }
+  },
+  {
+   "step": "scores",
+   "ok": true,
+   "points": 653,
+   "units": 653,
+   "absent_points": 0,
+   "suspect_points": 4,
+   "dates": [
+    "2026-10-27",
+    "2026-10-28",
+    "2026-10-29",
+    "2026-10-30",
+    "2026-10-31",
+    "2026-11-01",
+    "2026-11-02",
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05",
+    "2026-11-06",
+    "2026-11-07",
+    "2026-11-08",
+    "2026-11-09",
+    "2026-11-10"
+   ]
+  }
+ ],
+ "warnings": [
+  "4 points météo à cumul de pluie atypique par rapport aux voisins (confiance réduite)"
+ ],
+ "ok": true,
+ "qc": {
+  "missing_rate": {
+   "precip": 0.0,
+   "tmean": 0.0,
+   "tmax": 0.0,
+   "tmin": 0.0,
+   "et0": 0.0,
+   "tsoil": 0.0,
+   "sm": 0.0,
+   "sm2": 0.0,
+   "rh": 0.0
+  },
+  "out_of_range": {
+   "precip": 0,
+   "tmean": 0,
+   "tmax": 0,
+   "tmin": 0,
+   "et0": 0,
+   "tsoil": 0,
+   "sm": 0,
+   "sm2": 0,
+   "rh": 0
+  },
+  "spatial_outliers": [
+   {
+    "lat": 44.418,
+    "lon": 0.301,
+    "rain30": 109.7,
+    "neighbours": 57.6
+   },
+   {
+    "lat": 44.718,
+    "lon": -0.659,
+    "rain30": 42.0,
+    "neighbours": 9.5
+   },
+   {
+    "lat": 44.838,
+    "lon": -0.659,
+    "rain30": 46.3,
+    "neighbours": 9.1
+   },
+   {
+    "lat": 45.138,
+    "lon": -0.739,
+    "rain30": 47.6,
+    "neighbours": 6.5
+   }
+  ],
+  "flat_series_points": 0,
+  "first_valid_day": "2026-07-29",
+  "history_days": 97,
+  "model_moisture_envelopes": [
+   [
+    0.043,
+    0.28
+   ],
+   [
+    0.047,
+    0.262
+   ]
+  ]
+ },
+ "finished_at": "2026-11-03T10:30:27+01:00",
+ "duration_s": 134.1
+}

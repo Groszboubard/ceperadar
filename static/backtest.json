@@ -1,0 +1,772 @@
+{
+ "generated_at": "2026-11-07T13:02:52+00:00",
+ "period": [
+  "2015-01-01",
+  "2026-10-31"
+ ],
+ "n_obs_total": 64,
+ "n_obs_by_source": {
+  "iNaturalist": 54,
+  "GBIF": 10
+ },
+ "n_obs_by_species": {
+  "edulis": 37,
+  "aereus": 17,
+  "reticulatus": 9,
+  "pinophilus": 1
+ },
+ "n_min": 30,
+ "anchors": [
+  {
+   "lat": 44.75,
+   "lon": -0.5,
+   "n_obs": 8,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 44.5,
+   "lon": -1.0,
+   "n_obs": 4,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 44.75,
+   "lon": -0.75,
+   "n_obs": 4,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 45.25,
+   "lon": -1.0,
+   "n_obs": 4,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 44.75,
+   "lon": -1.0,
+   "n_obs": 3,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 44.5,
+   "lon": 0.25,
+   "n_obs": 3,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 45.25,
+   "lon": 0.25,
+   "n_obs": 2,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 45.25,
+   "lon": -1.25,
+   "n_obs": 2,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 44.0,
+   "lon": -1.25,
+   "n_obs": 2,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 45.0,
+   "lon": -1.0,
+   "n_obs": 2,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 44.25,
+   "lon": -0.75,
+   "n_obs": 2,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 45.25,
+   "lon": 0.5,
+   "n_obs": 2,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 45.25,
+   "lon": -0.5,
+   "n_obs": 2,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 45.0,
+   "lon": -1.25,
+   "n_obs": 1,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  },
+  {
+   "lat": 45.0,
+   "lon": -0.75,
+   "n_obs": 1,
+   "ru_mm": 35,
+   "lithology": "inconnue"
+  }
+ ],
+ "temporal": {
+  "all": {
+   "v1": {
+    "model_vs_year": {
+     "n": 42,
+     "auc": 0.895,
+     "ci90": [
+      0.867,
+      0.919
+     ],
+     "conclusive": true
+    },
+    "season_only_vs_year": {
+     "n": 42,
+     "auc": 0.819,
+     "ci90": [
+      0.786,
+      0.85
+     ],
+     "conclusive": true
+    },
+    "model_vs_pm30days": {
+     "n": 42,
+     "auc": 0.657,
+     "ci90": [
+      0.608,
+      0.707
+     ],
+     "conclusive": true
+    },
+    "median_W_at_obs": 73.3
+   },
+   "v11": {
+    "model_vs_year": {
+     "n": 42,
+     "auc": 0.887,
+     "ci90": [
+      0.86,
+      0.913
+     ],
+     "conclusive": true
+    },
+    "season_only_vs_year": {
+     "n": 42,
+     "auc": 0.819,
+     "ci90": [
+      0.786,
+      0.85
+     ],
+     "conclusive": true
+    },
+    "model_vs_pm30days": {
+     "n": 42,
+     "auc": 0.646,
+     "ci90": [
+      0.598,
+      0.693
+     ],
+     "conclusive": true
+    },
+    "median_W_at_obs": 75.2
+   }
+  },
+  "edulis": {
+   "v1": {
+    "model_vs_year": {
+     "n": 25,
+     "auc": 0.925,
+     "ci90": [
+      0.91,
+      0.941
+     ],
+     "conclusive": false
+    },
+    "season_only_vs_year": {
+     "n": 25,
+     "auc": 0.896,
+     "ci90": [
+      0.869,
+      0.919
+     ],
+     "conclusive": false
+    },
+    "model_vs_pm30days": {
+     "n": 25,
+     "auc": 0.678,
+     "ci90": [
+      0.614,
+      0.737
+     ],
+     "conclusive": false
+    },
+    "median_W_at_obs": 84.2
+   },
+   "v11": {
+    "model_vs_year": {
+     "n": 25,
+     "auc": 0.925,
+     "ci90": [
+      0.908,
+      0.94
+     ],
+     "conclusive": false
+    },
+    "season_only_vs_year": {
+     "n": 25,
+     "auc": 0.896,
+     "ci90": [
+      0.869,
+      0.919
+     ],
+     "conclusive": false
+    },
+    "model_vs_pm30days": {
+     "n": 25,
+     "auc": 0.671,
+     "ci90": [
+      0.605,
+      0.733
+     ],
+     "conclusive": false
+    },
+    "median_W_at_obs": 84.5
+   }
+  },
+  "pinophilus": {
+   "v1": {
+    "model_vs_year": {
+     "n": 0,
+     "conclusive": false
+    },
+    "season_only_vs_year": {
+     "n": 0,
+     "conclusive": false
+    },
+    "model_vs_pm30days": {
+     "n": 0,
+     "conclusive": false
+    },
+    "median_W_at_obs": null
+   },
+   "v11": {
+    "model_vs_year": {
+     "n": 0,
+     "conclusive": false
+    },
+    "season_only_vs_year": {
+     "n": 0,
+     "conclusive": false
+    },
+    "model_vs_pm30days": {
+     "n": 0,
+     "conclusive": false
+    },
+    "median_W_at_obs": null
+   }
+  },
+  "aereus": {
+   "v1": {
+    "model_vs_year": {
+     "n": 10,
+     "auc": 0.897,
+     "ci90": [
+      0.862,
+      0.925
+     ],
+     "conclusive": false
+    },
+    "season_only_vs_year": {
+     "n": 10,
+     "auc": 0.719,
+     "ci90": [
+      0.679,
+      0.751
+     ],
+     "conclusive": false
+    },
+    "model_vs_pm30days": {
+     "n": 10,
+     "auc": 0.598,
+     "ci90": [
+      0.517,
+      0.676
+     ],
+     "conclusive": false
+    },
+    "median_W_at_obs": 40.7
+   },
+   "v11": {
+    "model_vs_year": {
+     "n": 10,
+     "auc": 0.875,
+     "ci90": [
+      0.804,
+      0.925
+     ],
+     "conclusive": false
+    },
+    "season_only_vs_year": {
+     "n": 10,
+     "auc": 0.719,
+     "ci90": [
+      0.679,
+      0.751
+     ],
+     "conclusive": false
+    },
+    "model_vs_pm30days": {
+     "n": 10,
+     "auc": 0.61,
+     "ci90": [
+      0.528,
+      0.684
+     ],
+     "conclusive": false
+    },
+    "median_W_at_obs": 53.6
+   }
+  },
+  "reticulatus": {
+   "v1": {
+    "model_vs_year": {
+     "n": 7,
+     "auc": 0.787,
+     "ci90": [
+      0.652,
+      0.896
+     ],
+     "conclusive": false
+    },
+    "season_only_vs_year": {
+     "n": 7,
+     "auc": 0.689,
+     "ci90": [
+      0.607,
+      0.78
+     ],
+     "conclusive": false
+    },
+    "model_vs_pm30days": {
+     "n": 7,
+     "auc": 0.665,
+     "ci90": [
+      0.532,
+      0.787
+     ],
+     "conclusive": false
+    },
+    "median_W_at_obs": 55.0
+   },
+   "v11": {
+    "model_vs_year": {
+     "n": 7,
+     "auc": 0.773,
+     "ci90": [
+      0.682,
+      0.862
+     ],
+     "conclusive": false
+    },
+    "season_only_vs_year": {
+     "n": 7,
+     "auc": 0.689,
+     "ci90": [
+      0.607,
+      0.78
+     ],
+     "conclusive": false
+    },
+    "model_vs_pm30days": {
+     "n": 7,
+     "auc": 0.605,
+     "ci90": [
+      0.483,
+      0.722
+     ],
+     "conclusive": false
+    },
+    "median_W_at_obs": 55.0
+   }
+  },
+  "research_grade_only": {
+   "v1": {
+    "model_vs_year": {
+     "n": 30,
+     "auc": 0.919,
+     "ci90": [
+      0.902,
+      0.935
+     ],
+     "conclusive": true
+    },
+    "season_only_vs_year": {
+     "n": 30,
+     "auc": 0.832,
+     "ci90": [
+      0.796,
+      0.867
+     ],
+     "conclusive": true
+    },
+    "model_vs_pm30days": {
+     "n": 30,
+     "auc": 0.696,
+     "ci90": [
+      0.644,
+      0.745
+     ],
+     "conclusive": true
+    },
+    "median_W_at_obs": 75.4
+   },
+   "v11": {
+    "model_vs_year": {
+     "n": 30,
+     "auc": 0.909,
+     "ci90": [
+      0.887,
+      0.93
+     ],
+     "conclusive": true
+    },
+    "season_only_vs_year": {
+     "n": 30,
+     "auc": 0.832,
+     "ci90": [
+      0.796,
+      0.867
+     ],
+     "conclusive": true
+    },
+    "model_vs_pm30days": {
+     "n": 30,
+     "auc": 0.685,
+     "ci90": [
+      0.638,
+      0.733
+     ],
+     "conclusive": true
+    },
+    "median_W_at_obs": 80.2
+   }
+  },
+  "odd_years": {
+   "v11": {
+    "model_vs_year": {
+     "n": 31,
+     "auc": 0.891,
+     "ci90": [
+      0.867,
+      0.911
+     ],
+     "conclusive": true
+    },
+    "season_only_vs_year": {
+     "n": 31,
+     "auc": 0.812,
+     "ci90": [
+      0.777,
+      0.847
+     ],
+     "conclusive": true
+    },
+    "model_vs_pm30days": {
+     "n": 31,
+     "auc": 0.637,
+     "ci90": [
+      0.576,
+      0.694
+     ],
+     "conclusive": true
+    },
+    "median_W_at_obs": 74.8
+   }
+  },
+  "even_years": {
+   "v11": {
+    "model_vs_year": {
+     "n": 11,
+     "auc": 0.877,
+     "ci90": [
+      0.798,
+      0.956
+     ],
+     "conclusive": false
+    },
+    "season_only_vs_year": {
+     "n": 11,
+     "auc": 0.84,
+     "ci90": [
+      0.77,
+      0.903
+     ],
+     "conclusive": false
+    },
+    "model_vs_pm30days": {
+     "n": 11,
+     "auc": 0.671,
+     "ci90": [
+      0.583,
+      0.755
+     ],
+     "conclusive": false
+    },
+    "median_W_at_obs": 80.9
+   }
+  },
+  "wet_autumns": {
+   "n": 25,
+   "auc": 0.886,
+   "ci90": [
+    0.86,
+    0.909
+   ],
+   "conclusive": false
+  },
+  "dry_autumns": {
+   "n": 17,
+   "auc": 0.89,
+   "ci90": [
+    0.828,
+    0.94
+   ],
+   "conclusive": false
+  }
+ },
+ "spatial": {
+  "all": {
+   "v1": {
+    "n": 35,
+    "auc": 0.704,
+    "ci90": [
+     0.64,
+     0.763
+    ],
+    "conclusive": true
+   },
+   "v11": {
+    "n": 35,
+    "auc": 0.686,
+    "ci90": [
+     0.618,
+     0.753
+    ],
+    "conclusive": true
+   }
+  },
+  "edulis": {
+   "v1": {
+    "n": 20,
+    "auc": 0.712,
+    "ci90": [
+     0.617,
+     0.794
+    ],
+    "conclusive": false
+   },
+   "v11": {
+    "n": 20,
+    "auc": 0.69,
+    "ci90": [
+     0.586,
+     0.783
+    ],
+    "conclusive": false
+   }
+  },
+  "pinophilus": {
+   "v1": {
+    "n": 0,
+    "conclusive": false
+   },
+   "v11": {
+    "n": 0,
+    "conclusive": false
+   }
+  },
+  "aereus": {
+   "v1": {
+    "n": 9,
+    "auc": 0.745,
+    "ci90": [
+     0.647,
+     0.833
+    ],
+    "conclusive": false
+   },
+   "v11": {
+    "n": 9,
+    "auc": 0.718,
+    "ci90": [
+     0.612,
+     0.814
+    ],
+    "conclusive": false
+   }
+  },
+  "reticulatus": {
+   "v1": {
+    "n": 6,
+    "auc": 0.613,
+    "ci90": [
+     0.518,
+     0.72
+    ],
+    "conclusive": false
+   },
+   "v11": {
+    "n": 6,
+    "auc": 0.628,
+    "ci90": [
+     0.549,
+     0.719
+    ],
+    "conclusive": false
+   }
+  },
+  "baseline_forest_cover": {
+   "n": 35,
+   "auc": 0.556,
+   "ci90": [
+    0.488,
+    0.62
+   ],
+   "conclusive": false
+  },
+  "obs_outside_forest_cells": 0,
+  "n_precise_obs": 35
+ },
+ "sensitivity": {
+  "reference_v11_edulis": {
+   "n": 25,
+   "auc": 0.925,
+   "ci90": [
+    0.908,
+    0.94
+   ],
+   "conclusive": false
+  },
+  "fenetre_pluie_-5j": {
+   "n": 25,
+   "auc": 0.918,
+   "ci90": [
+    0.901,
+    0.935
+   ],
+   "conclusive": false
+  },
+  "fenetre_pluie_+5j": {
+   "n": 25,
+   "auc": 0.93,
+   "ci90": [
+    0.914,
+    0.945
+   ],
+   "conclusive": false
+  },
+  "ru_22mm": {
+   "n": 25,
+   "auc": 0.923,
+   "ci90": [
+    0.907,
+    0.94
+   ],
+   "conclusive": false
+  },
+  "ru_55mm": {
+   "n": 25,
+   "auc": 0.924,
+   "ci90": [
+    0.909,
+    0.94
+   ],
+   "conclusive": false
+  },
+  "kc_0.5": {
+   "n": 25,
+   "auc": 0.924,
+   "ci90": [
+    0.908,
+    0.939
+   ],
+   "conclusive": false
+  },
+  "kc_0.8": {
+   "n": 25,
+   "auc": 0.923,
+   "ci90": [
+    0.907,
+    0.94
+   ],
+   "conclusive": false
+  },
+  "seuils_M_0.10-0.60": {
+   "n": 25,
+   "auc": 0.923,
+   "ci90": [
+    0.907,
+    0.939
+   ],
+   "conclusive": false
+  },
+  "modele_humidite_seul": {
+   "n": 25,
+   "auc": 0.923,
+   "ci90": [
+    0.907,
+    0.94
+   ],
+   "conclusive": false
+  },
+  "bilan_hydrique_seul": {
+   "n": 25,
+   "auc": 0.924,
+   "ci90": [
+    0.907,
+    0.94
+   ],
+   "conclusive": false
+  }
+ },
+ "bias": {
+  "weekend_share": 0.281,
+  "weekend_expected": 0.286,
+  "median_dist_obs_km": 47.1,
+  "median_dist_forest_km": 65.0,
+  "by_month": {
+   "1": 1,
+   "4": 6,
+   "5": 2,
+   "6": 1,
+   "7": 4,
+   "8": 1,
+   "9": 8,
+   "10": 30,
+   "11": 11
+  }
+ },
+ "notes": [
+  "AUC = probabilité qu'une observation soit mieux classée qu'un témoin tiré au hasard ; 0,5 = hasard.",
+  "Un résultat est « concluant » seulement avec au moins 30 observations et un intervalle à 90 % qui exclut 0,5.",
+  "Les paramètres de la V1.1 n'ont pas été ajustés sur ces observations : elles constituent un jeu de test.",
+  "Observations opportunistes : biais vers les lieux accessibles, les week-ends et les années de forte fréquentation ; une absence de donnée ne signifie pas une absence de cèpes.",
+  "ERA5 (~25 km) est moins fin que les données de production ; l'humidité du sol ERA5 (0-7 / 7-28 cm) remplace celle d'Open-Meteo (3-9 / 9-27 cm).",
+  "Ces chiffres ne mesurent PAS une précision prédictive ; ils indiquent si le classement va dans le bon sens."
+ ]
+}

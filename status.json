@@ -1,0 +1,100 @@
+{
+ "started_at": "2026-11-14T22:39:43+01:00",
+ "kind": "evening",
+ "model_version": "1.1.0",
+ "steps": [
+  {
+   "step": "open-meteo",
+   "ok": true,
+   "past_days": 9,
+   "requests": 5,
+   "weight": 1030.8,
+   "variables": {
+    "daily": [
+     "precipitation_sum",
+     "temperature_2m_mean",
+     "temperature_2m_max",
+     "temperature_2m_min",
+     "et0_fao_evapotranspiration",
+     "sunshine_duration",
+     "shortwave_radiation_sum",
+     "relative_humidity_2m_mean",
+     "dew_point_2m_mean",
+     "precipitation_hours"
+    ],
+    "hourly": [
+     "soil_temperature_6cm",
+     "soil_moisture_3_to_9cm",
+     "soil_moisture_9_to_27cm"
+    ]
+   }
+  },
+  {
+   "step": "scores",
+   "ok": true,
+   "points": 653,
+   "units": 653,
+   "absent_points": 0,
+   "suspect_points": 0,
+   "dates": [
+    "2026-11-07",
+    "2026-11-08",
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-11",
+    "2026-11-12",
+    "2026-11-13",
+    "2026-11-14",
+    "2026-11-15",
+    "2026-11-16",
+    "2026-11-17",
+    "2026-11-18",
+    "2026-11-19",
+    "2026-11-20",
+    "2026-11-21"
+   ]
+  }
+ ],
+ "warnings": [],
+ "ok": true,
+ "qc": {
+  "missing_rate": {
+   "precip": 0.0,
+   "tmean": 0.0,
+   "tmax": 0.0,
+   "tmin": 0.0,
+   "et0": 0.0,
+   "tsoil": 0.0,
+   "sm": 0.0,
+   "sm2": 0.0,
+   "rh": 0.0
+  },
+  "out_of_range": {
+   "precip": 0,
+   "tmean": 0,
+   "tmax": 0,
+   "tmin": 0,
+   "et0": 0,
+   "tsoil": 0,
+   "sm": 0,
+   "sm2": 0,
+   "rh": 0
+  },
+  "spatial_outliers": [],
+  "flat_series_points": 0,
+  "first_valid_day": "2026-07-29",
+  "history_days": 108,
+  "model_moisture_envelopes": [
+   [
+    0.045,
+    0.308
+   ],
+   [
+    0.049,
+    0.288
+   ]
+  ]
+ },
+ "finished_at": "2026-11-14T22:42:12+01:00",
+ "duration_s": 149.4
+}

@@ -1,0 +1,121 @@
+{
+ "started_at": "2026-11-25T05:01:41+01:00",
+ "kind": "morning",
+ "model_version": "1.1.0",
+ "steps": [
+  {
+   "step": "open-meteo",
+   "ok": true,
+   "past_days": 4,
+   "requests": 5,
+   "weight": 848.9,
+   "variables": {
+    "daily": [
+     "precipitation_sum",
+     "temperature_2m_mean",
+     "temperature_2m_max",
+     "temperature_2m_min",
+     "et0_fao_evapotranspiration",
+     "sunshine_duration",
+     "shortwave_radiation_sum",
+     "relative_humidity_2m_mean",
+     "dew_point_2m_mean",
+     "precipitation_hours"
+    ],
+    "hourly": [
+     "soil_temperature_6cm",
+     "soil_moisture_3_to_9cm",
+     "soil_moisture_9_to_27cm"
+    ]
+   }
+  },
+  {
+   "step": "scores",
+   "ok": true,
+   "points": 653,
+   "units": 653,
+   "absent_points": 0,
+   "suspect_points": 3,
+   "dates": [
+    "2026-11-18",
+    "2026-11-19",
+    "2026-11-20",
+    "2026-11-21",
+    "2026-11-22",
+    "2026-11-23",
+    "2026-11-24",
+    "2026-11-25",
+    "2026-11-26",
+    "2026-11-27",
+    "2026-11-28",
+    "2026-11-29",
+    "2026-11-30",
+    "2026-12-01",
+    "2026-12-02"
+   ]
+  }
+ ],
+ "warnings": [
+  "3 points météo à cumul de pluie atypique par rapport aux voisins (confiance réduite)"
+ ],
+ "ok": true,
+ "qc": {
+  "missing_rate": {
+   "precip": 0.0,
+   "tmean": 0.0,
+   "tmax": 0.0,
+   "tmin": 0.0,
+   "et0": 0.0,
+   "tsoil": 0.0,
+   "sm": 0.0,
+   "sm2": 0.0,
+   "rh": 0.0
+  },
+  "out_of_range": {
+   "precip": 0,
+   "tmean": 0,
+   "tmax": 0,
+   "tmin": 0,
+   "et0": 0,
+   "tsoil": 0,
+   "sm": 0,
+   "sm2": 0,
+   "rh": 0
+  },
+  "spatial_outliers": [
+   {
+    "lat": 43.938,
+    "lon": -0.499,
+    "rain30": 37.9,
+    "neighbours": 111.8
+   },
+   {
+    "lat": 44.838,
+    "lon": -0.659,
+    "rain30": 121.9,
+    "neighbours": 64.9
+   },
+   {
+    "lat": 45.018,
+    "lon": -0.739,
+    "rain30": 131.6,
+    "neighbours": 64.4
+   }
+  ],
+  "flat_series_points": 0,
+  "first_valid_day": "2026-07-29",
+  "history_days": 119,
+  "model_moisture_envelopes": [
+   [
+    0.047,
+    0.324
+   ],
+   [
+    0.05,
+    0.313
+   ]
+  ]
+ },
+ "finished_at": "2026-11-25T05:03:23+01:00",
+ "duration_s": 102.9
+}
